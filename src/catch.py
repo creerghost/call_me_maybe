@@ -9,11 +9,11 @@ def catch(fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         try:
             return fn(*args, **kwargs)
         except JSONDecodeError as e:
-            raise JSONDecodeError(f"JSON error: {e}")
+            raise Exception(f"JSON error: {e}")
         except FileNotFoundError as e:
-            raise FileNotFoundError(f"Error: File missing: {e}")
+            raise Exception(f"Error: File missing: {e}")
         except ImportError as e:
-            raise ImportError(f"Import error: {e}")
+            raise Exception(f"Import error: {e}")
         except KeyboardInterrupt:
             print("\nKeyboard interrupt. Bye!")
             quit(0)

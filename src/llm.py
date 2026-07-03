@@ -1,6 +1,5 @@
 import importlib
 import json
-from numpy import squeeze
 
 
 class LLM():
