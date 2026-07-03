@@ -71,6 +71,13 @@ class ConstrainedDecoder:
             JSONState.PARAM_KEY: lambda p, c: self._get_tokens_for_options(
                 c['allowed_params'], p
             ),
+            JSONState.PARAM_COLON: lambda p, c: self._get_tokens_for_string(
+                ":", p
+            ),
+            JSONState.PARAM_NEXT: lambda p, c: self._get_tokens_for_options(
+                [",", "}"], p
+            ),
+            JSONState.PARAM_VALUE: self._get_tokens_for_value,
         }
 
     def get_valid_tokens_for_state(self, state: JSONState, current_prefix: str,
@@ -92,12 +99,17 @@ class ConstrainedDecoder:
         this method returns the token IDs for 'ame', 'am', 'a', etc.
         """
         valid_ids = []
+        curr_prefix = curr_prefix.strip()
         if curr_prefix == expected:
             return []
         remainder = expected[len(curr_prefix):]
 
         for token_str, token_id in self.llm.token2id.items():
             clean_str = token_str.replace("Ġ", " ")
+            if not clean_str.strip():
+                valid_ids.append(token_id)
+                continue
+            clean_str = clean_str.strip()
             if remainder.startswith(clean_str):
                 valid_ids.append(token_id)
             elif clean_str.startswith(remainder):
@@ -115,6 +127,7 @@ class ConstrainedDecoder:
         (like all allowed function names).
         """
         valid_ids = set()
+        current_prefix = current_prefix.strip()
 
         for expected in options:
             if expected.startswith(current_prefix):
@@ -122,6 +135,27 @@ class ConstrainedDecoder:
                 valid_ids.update(tokens)
 
         return list(valid_ids)
+
+    def _get_tokens_for_value(self, current_prefix: str,
+                              context: dict) -> list[int]:
+        param_type = context['param_types'].get(context['current_param'])
+
+        if param_type == "string":
+            if current_prefix.strip() == "":
+                return self._get_tokens_for_string('"', current_prefix)
+            return list(self.llm.token2id.values())
+
+        elif param_type == "number":
+            valid = []
+            for s, tid in self.llm.token2id.items():
+                clean = s.replace("Ġ", " ").strip()
+                if not clean:
+                    valid.append(tid)
+                    continue
+                if all(c in "0123456789.-,}" for c in clean):
+                    valid.append(tid)
+            return valid
+        return []
 
     def generate(self, prompt: str, func_defs: list) -> str:
         """
@@ -143,8 +177,11 @@ class ConstrainedDecoder:
         generated_tokens = []
         current_prefix = ""
         context = {
+            'func_defs': {f'"{f.name}"': f for f in func_defs},
             'allowed_funcs': [f'"{f.name}"' for f in func_defs],
-            'allowed_params': []
+            'allowed_params': [],
+            'param_types': {},
+            'current_param': None
         }
 
         while state != JSONState.DONE:
@@ -188,13 +225,14 @@ class ConstrainedDecoder:
             JSONState.PARAMS_KEY: '"parameters"',
             JSONState.PARAMS_COLON: ":",
             JSONState.PARAMS_START: "{",
+            JSONState.PARAM_COLON: ":",
             JSONState.END: "}",
         }
 
         # 1. Handle Static Strings
         if state in expected_strings:
             expected = expected_strings[state]
-            if current_prefix == expected:
+            if current_prefix.strip() == expected:
                 next_states = {
                     JSONState.START: JSONState.NAME_KEY,
                     JSONState.NAME_KEY: JSONState.NAME_COLON,
@@ -203,14 +241,45 @@ class ConstrainedDecoder:
                     JSONState.PARAMS_KEY: JSONState.PARAMS_COLON,
                     JSONState.PARAMS_COLON: JSONState.PARAMS_START,
                     JSONState.PARAMS_START: JSONState.PARAM_KEY,
+                    JSONState.PARAM_COLON: JSONState.PARAM_VALUE,
                     JSONState.END: JSONState.DONE
                 }
-                return next_states[state],
+                return next_states[state], ""
 
         # 2. Handle Dynamic Options (like NAME_VALUE)
         elif state == JSONState.NAME_VALUE:
-            if current_prefix in context['allowed_funcs']:
+            if current_prefix.strip() in context['allowed_funcs']:
+                func_def = context['func_defs'][current_prefix.strip()]
+                context['allowed_params'] = [
+                    f'"{p}"' for p in func_def.parameters.keys()
+                ]
+                context['param_types'] = {
+                    f'"{p}"': v.type for p, v in func_def.parameters.items()
+                }
                 return JSONState.COMMA_AFTER, ""
+
+        elif state == JSONState.PARAM_KEY:
+            if current_prefix.strip() in context['allowed_params']:
+                context['current_param'] = current_prefix.strip()
+                return JSONState.PARAM_COLON, ""
+
+        elif state == JSONState.PARAM_VALUE:
+            param_type = context['param_types'].get(context['current_param'])
+            if param_type == "string":
+                prefix_stripped = current_prefix.strip()
+                if current_prefix.endswith('"') and len(prefix_stripped) > 1:
+                    return JSONState.PARAM_NEXT, ""
+            elif param_type == "number":
+                if "}" in current_prefix:
+                    return JSONState.END, ""
+                elif "," in current_prefix:
+                    return JSONState.PARAM_KEY, ""
+
+        elif state == JSONState.PARAM_NEXT:
+            if current_prefix.strip() == ",":
+                return JSONState.PARAM_KEY, ""
+            elif current_prefix.strip() == "}":
+                return JSONState.END, ""
 
         # 3. If we are not done with this state, stay in the same state
         return state, current_prefix
