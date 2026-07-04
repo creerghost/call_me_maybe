@@ -14,6 +14,8 @@ def catch(fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
             raise Exception(f"Error: File missing: {e}")
         except ImportError as e:
             raise Exception(f"Import error: {e}")
+        except PromptConstructionError as e:
+            raise Exception(f"Error during prompt construction: {e}")
         except KeyboardInterrupt:
             print("\nKeyboard interrupt. Bye!")
             quit(0)

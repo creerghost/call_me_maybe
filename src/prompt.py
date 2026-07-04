@@ -8,7 +8,7 @@ class PromptConstructor():
                      user_prompt: str) -> str:
         if not functions:
             raise PromptConstructionError("No valid function definition(s)")
-        if not user_prompt:
+        if not user_prompt.strip():
             raise PromptConstructionError("User prompt is not defined")
 
         instruction_block = (
@@ -22,7 +22,7 @@ class PromptConstructor():
         for f in functions:
             func_lines.append(f"- Name: {f.name}")
             func_lines.append(f"  Description: {f.description}")
-            func_lines.append("  Parameters")
+            func_lines.append("  Parameters:")
             for p_name, p in f.parameters.items():
                 func_lines.append(f"   - {p_name}: {p.type}")
             func_lines.append(f"  Returns: {f.returns.type}")
