@@ -189,10 +189,81 @@ States:
 - You need to handle multi-character tokens carefully (a token might be `": "` which spans a colon and value)
 
 ### Phase 5: Prompt Engineering (`src/prompt.py`)
-- Build a prompt that tells the LLM what function to call
-- Include function definitions in the prompt so the model has context
-- Format: system prompt + function definitions + user prompt
-- The prompt guides the model; constrained decoding guarantees the structure
+- Build a dedicated prompt-construction module whose only job is to turn validated inputs into a single deterministic LLM prompt string.
+- Keep the module pure: no file I/O, no model loading, no decoding logic, and no direct dependency on the CLI.
+- Treat the prompt as a contract between the loader, the LLM, and the constrained decoder. The prompt should help the model choose the right function, while the decoder still enforces correctness.
+
+#### 5.1 Purpose of `src/prompt.py`
+- Give the model enough context to identify which function should be called for the current user request.
+- Present the available functions in a stable, readable, machine-friendly way.
+- Minimize ambiguity by explicitly describing the output shape the model must follow.
+- Keep prompt generation deterministic so the same inputs always produce the same prompt text, which makes debugging and testing easier.
+
+#### 5.2 Inputs and Outputs
+- **Input:** a list of validated `FunctionDefinition` objects and one validated user prompt string.
+- **Output:** one formatted prompt string ready to be tokenized and passed into `ConstrainedDecoder.generate()`.
+- The module should not mutate the input models. It should only read from them and build text.
+- If the input list of functions is empty, the builder should fail fast with a descriptive error because the model cannot make a meaningful function choice.
+
+#### 5.3 Prompt Structure
+- Use a fixed section order so the model sees the same organization every time.
+- Recommended structure:
+  - system/instruction block: explain that the model must return a function-call JSON object only
+  - function catalog block: list every available function with description, parameters, and return type
+  - output contract block: restate the required JSON shape and type expectations
+  - user request block: include the actual user prompt last so it remains the freshest context
+- Keep headers explicit and unambiguous, such as `Available functions:`, `Output format:`, and `User request:`.
+- Avoid natural-language clutter that does not add selection signal, because the decoder already guarantees structure and the prompt only needs to help with function choice.
+
+#### 5.4 Function Serialization Rules
+- Serialize each function in a consistent format.
+- Include the function name exactly as it appears in the JSON input.
+- Include the function description in full unless it is extremely long; if truncation is ever needed, define a deterministic truncation rule.
+- List parameters in a stable order. Use the original order from the JSON file or alphabetical order, but choose one rule and keep it fixed.
+- For each parameter, show both the name and the type.
+- Include the return type so the model has a stronger semantic hint about what the function does.
+- Separate functions clearly with blank lines or bullets, but keep the formatting compact enough that the prompt does not become unnecessarily long.
+
+#### 5.5 Output Contract Text
+- The prompt should explicitly tell the model what the final JSON must contain.
+- Reinforce that only the function call structure is allowed, not freeform explanation text.
+- The contract should mention the top-level keys expected by the decoder, especially `name` and `parameters`.
+- Make it clear that the function name must be chosen from the provided catalog and that parameter keys must match the selected function definition.
+- The prompt should not try to encode the entire JSON grammar. That is the decoder's job. It only needs to orient the model toward the correct structure.
+
+#### 5.6 Helper Functions to Implement
+- `format_function_definition(definition) -> str`: serialize one `FunctionDefinition` into a readable text block.
+- `format_parameter(name, parameter) -> str`: serialize one parameter entry with its type.
+- `format_function_catalog(definitions) -> str`: serialize the whole function list in deterministic order.
+- `build_prompt(function_definitions, user_prompt) -> str`: assemble the final prompt string from all sections.
+- Optional helper: `normalize_text(value) -> str` to strip redundant whitespace before insertion into the prompt.
+
+#### 5.7 Validation and Safety Checks
+- Reject a blank or whitespace-only user prompt if that would create a meaningless generation request.
+- Reject an empty function catalog.
+- Preserve special characters safely when inserting descriptions or user prompts into the text.
+- Do not rely on implicit formatting side effects; all section separators and indentation should be explicit.
+- Keep the builder stable across Python versions and locale settings by avoiding any formatting that depends on environment-specific behavior.
+
+#### 5.8 Integration Points
+- `src/__main__.py` should call the prompt builder once per test prompt.
+- `src/decoder.py` should receive the built prompt string exactly as returned, with no extra transformation beyond tokenization.
+- `src/models.py` already defines the input types, so prompt.py should type against those models rather than raw dictionaries.
+- `src/loader.py` remains responsible for validation of the JSON files; prompt.py should assume it receives already-validated objects.
+
+#### 5.9 Testing Strategy for `src/prompt.py`
+- Verify deterministic output: the same inputs should always produce identical prompt text.
+- Verify coverage: every function from the catalog should appear once in the generated prompt.
+- Verify content: function names, parameter names, parameter types, and return types should all be present.
+- Verify structure: the output should contain the expected section headers in the expected order.
+- Verify error handling: empty function lists and invalid prompt strings should raise clear exceptions.
+- Verify edge cases: long descriptions, many functions, special characters, and unusual whitespace in the user prompt.
+
+#### 5.10 Why This Module Matters
+- Better prompts improve the model's function selection accuracy before decoding begins.
+- A clean separation keeps the prompt logic easy to test without involving the model.
+- Deterministic prompt text makes it easier to diff outputs and debug failures.
+- Prompt quality and decoder correctness work together: prompt.py helps the model choose well, and decoder.py guarantees the output remains valid JSON.
 
 ### Phase 6: Main Pipeline (`src/__main__.py`)
 ```python

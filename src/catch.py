@@ -22,3 +22,7 @@ def catch(fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     except Exception as e:
         print(e)
         quit(1)
+
+
+class PromptConstructionError(Exception):
+    pass

@@ -2,6 +2,15 @@
 # export HF_HOME = /sgoinfre/vlnikola/.cache/huggingface
 # export TORCH_HOME = /sgoinfre/vlnikola/.cache/torch
 
+
+# TODO: add a target to run tests with pytest
+
+# TODO: add a target to run manually where we will ask
+# user required arguments and then run the script with those arguments
+
+# TODO: add --model argument
+
+# TODO: add --visual argument to visualize the function calling process
 UV = uv
 PYTHON = $(UV) run python
 
