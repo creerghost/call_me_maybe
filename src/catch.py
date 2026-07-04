@@ -8,6 +8,10 @@ class PromptConstructionError(Exception):
     """Raised when prompt construction fails."""
 
 
+class LoaderError(Exception):
+    """Raised when loading data files fails."""
+
+
 def catch(fn: Callable[..., Any]) -> Callable[..., Any]:
     """Wrap a callable with universal error handling.
 
@@ -33,6 +37,9 @@ def catch(fn: Callable[..., Any]) -> Callable[..., Any]:
             quit(1)
         except PromptConstructionError as e:
             print(f"Error during prompt construction: {e}")
+            quit(1)
+        except LoaderError as e:
+            print(f"Loader error: {e}")
             quit(1)
         except (ArgumentTypeError, ArgumentError) as e:
             print(f"Argument parser error: {e}")
