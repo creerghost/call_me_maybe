@@ -192,6 +192,7 @@ class ConstrainedDecoder:
 
     def _get_tokens_for_value(self, current_prefix: str,
                               context: dict[str, Any]) -> list[int]:
+        """Return valid tokens for the current parameter value type."""
         param_type = context['param_types'].get(context['current_param'])
 
         if param_type == "string":
@@ -200,15 +201,32 @@ class ConstrainedDecoder:
             return list(self.llm.token2id.values())
 
         elif param_type == "number":
+            valid: list[int] = []
+            for s, tid in self.llm.token2id.items():
+                clean = s.replace("Ġ", " ").strip()
+                if not clean:
+                    valid.append(tid)
+                    continue
+                if all(c in "0123456789.-" for c in clean):
+                    valid.append(tid)
+            return valid
+
+        elif param_type == "integer":
             valid = []
             for s, tid in self.llm.token2id.items():
                 clean = s.replace("Ġ", " ").strip()
                 if not clean:
                     valid.append(tid)
                     continue
-                if all(c in "0123456789.-,}" for c in clean):
+                if all(c in "0123456789-" for c in clean):
                     valid.append(tid)
             return valid
+
+        elif param_type == "boolean":
+            return self._get_tokens_for_options(
+                ["true", "false"], current_prefix
+            )
+
         return []
 
     def _transition_state(self, state: JSONState,
@@ -273,11 +291,15 @@ class ConstrainedDecoder:
                 prefix_stripped = current_prefix.strip()
                 if current_prefix.endswith('"') and len(prefix_stripped) > 1:
                     return JSONState.PARAM_NEXT, ""
-            elif param_type == "number":
+            elif param_type in ("number", "integer"):
                 if "}" in current_prefix:
                     return JSONState.END, ""
                 elif "," in current_prefix:
                     return JSONState.PARAM_KEY, ""
+            elif param_type == "boolean":
+                stripped = current_prefix.strip()
+                if stripped in ("true", "false"):
+                    return JSONState.PARAM_NEXT, ""
 
         elif state == JSONState.PARAM_NEXT:
             if current_prefix.strip() == ",":

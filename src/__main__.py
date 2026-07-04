@@ -23,18 +23,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+@catch
 def load_loader(functions_definition: str, input_path: str) -> Loader:
     return Loader(functions_definition, input_path)
 
 
+@catch
 def load_llm(llm_path: str, llm_name: str) -> LLM:
     return LLM(llm_path, llm_name)
 
 
+@catch
 def build_prompt(loader: Loader, test_prompt: TestPrompt) -> str:
     return PromptConstructor.build_prompt(loader.fn_defs, test_prompt.prompt)
 
 
+@catch
 def generate_result(decoder: ConstrainedDecoder,
                     loader: Loader,
                     test_prompt: TestPrompt) -> FunctionCallResult:
@@ -49,6 +53,7 @@ def generate_result(decoder: ConstrainedDecoder,
     )
 
 
+@catch
 def run_pipeline(args: argparse.Namespace) -> None:
     """Run the full load → prompt → decode → write pipeline."""
     loader = load_loader(args.functions_definition, args.input)
@@ -64,6 +69,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     OutputWriter.write_output(results, args.output)
 
 
+@catch
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
@@ -71,4 +77,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    catch(main)
+    main()

@@ -6,7 +6,7 @@
 FUNCTIONS_JSON = data/input/functions_definition.json
 INPUT_JSON = data/input/function_calling_tests.json
 OUTPUT_JSON = data/output/function_calling_results.json
-LLM_PATH = llm_sdk.llm_sdk
+LLM_PATH = llm_sdk
 LLM_NAME = Small_LLM_Model
 
 # TODO: add a target to run tests with pytest

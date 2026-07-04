@@ -8,12 +8,9 @@ authors = [
     { name = "vlnikola", email = "vlnikola@student.42prague.com" },
 ]
 dependencies = [
+    "llm-sdk",
     "numpy>=2.0.0",
     "pydantic>=2.10.0",
-    "torch>=2.0.0",
-    "transformers>=4.40.0",
-    "huggingface-hub>=0.20.0",
-    "accelerate>=0.25.0",
 ]
 
 [dependency-groups]
@@ -22,3 +19,6 @@ dev = [
     "mypy>=1.10.0",
     "pytest>=7.0.0",
 ]
+
+[tool.uv.sources]
+llm-sdk = { path = "./llm_sdk", editable = true }
