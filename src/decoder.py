@@ -115,19 +115,28 @@ class ConstrainedDecoder:
             logits = self.llm.get_logits(input_ids + generated_tokens)
             valid_ids = self.get_valid_tokens_for_state(state, current_prefix,
                                                         context)
+            if not valid_ids:
+                print(f"[DEBUG] FATAL: No valid tokens for state {state.name} with prefix '{current_prefix}'. Breaking.")
+                break
 
+            valid_set = set(valid_ids)
             for i in range(len(logits)):
-                if i not in valid_ids:
+                if i not in valid_set:
                     logits[i] = float("-inf")
 
             next_token_id = logits.index(max(logits))
             generated_tokens.append(next_token_id)
 
             token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
+            print(f"[DEBUG] state={state.name}, valid_tokens={len(valid_ids)}, chosen='{token_str}'")
+            
             current_prefix += token_str
+            old_state = state
             state, current_prefix = self._transition_state(state,
                                                            current_prefix,
                                                            context)
+            if old_state != state:
+                print(f"[DEBUG] transitioned to {state.name}")
 
             if len(generated_tokens) > 200:
                 break
@@ -147,26 +156,25 @@ class ConstrainedDecoder:
 
     def _get_tokens_for_string(self, expected: str,
                                curr_prefix: str) -> list[int]:
-        """
-        Looks at the entire x-word vocabulary of the LLM.
-        If it expects 'name' and have already generated 'n',
-        this method returns the token IDs for 'ame', 'am', 'a', etc.
-        """
-        valid_ids = []
-        curr_prefix = curr_prefix.strip()
+        valid_ids: list[int] = []
+        curr_prefix = curr_prefix.lstrip()
         if curr_prefix == expected:
             return []
+            
+        if not expected.startswith(curr_prefix):
+            return []
+            
         remainder = expected[len(curr_prefix):]
 
         for token_str, token_id in self.llm.token2id.items():
             clean_str = token_str.replace("Ġ", " ")
-            if not clean_str.strip():
-                valid_ids.append(token_id)
+            if not curr_prefix:
+                clean_str = clean_str.lstrip()
+                
+            if not clean_str:
                 continue
-            clean_str = clean_str.strip()
+                
             if remainder.startswith(clean_str):
-                valid_ids.append(token_id)
-            elif clean_str.startswith(remainder):
                 valid_ids.append(token_id)
         return valid_ids
 
@@ -203,22 +211,24 @@ class ConstrainedDecoder:
         elif param_type == "number":
             valid: list[int] = []
             for s, tid in self.llm.token2id.items():
-                clean = s.replace("Ġ", " ").strip()
+                clean = s.replace("Ġ", " ")
+                if not current_prefix.strip():
+                    clean = clean.lstrip()
                 if not clean:
-                    valid.append(tid)
                     continue
-                if all(c in "0123456789.-" for c in clean):
+                if all(c in "0123456789.-,}" for c in clean):
                     valid.append(tid)
             return valid
 
         elif param_type == "integer":
             valid = []
             for s, tid in self.llm.token2id.items():
-                clean = s.replace("Ġ", " ").strip()
+                clean = s.replace("Ġ", " ")
+                if not current_prefix.strip():
+                    clean = clean.lstrip()
                 if not clean:
-                    valid.append(tid)
                     continue
-                if all(c in "0123456789-" for c in clean):
+                if all(c in "0123456789-,}" for c in clean):
                     valid.append(tid)
             return valid
 
@@ -239,6 +249,8 @@ class ConstrainedDecoder:
         E.g., if we were in START and current_prefix is now "{", we transition
             to NAME_KEY.
         """
+        print(f"[DEBUG _transition_state] checking state={state.name}, prefix='{current_prefix}'")
+        
         expected_strings = {
             JSONState.START: "{",
             JSONState.NAME_KEY: '"name"',
