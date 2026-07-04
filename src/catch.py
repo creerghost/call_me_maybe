@@ -1,30 +1,50 @@
-from typing import Callable, TypeVar, Any
+from functools import wraps
 from json import JSONDecodeError
+from typing import Any, Callable
+from argparse import ArgumentError, ArgumentTypeError
 
-T = TypeVar("T")
+
+class PromptConstructionError(Exception):
+    """Raised when prompt construction fails."""
 
 
-def catch(fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
-    try:
+def catch(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Wrap a callable with universal error handling.
+
+    Args:
+        fn: Function or method to wrap.
+
+    Returns:
+        Wrapped callable that prints a friendly error message and exits.
+    """
+
+    @wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return fn(*args, **kwargs)
         except JSONDecodeError as e:
-            raise Exception(f"JSON error: {e}")
+            print(f"JSON error: {e}")
+            quit(1)
         except FileNotFoundError as e:
-            raise Exception(f"Error: File missing: {e}")
+            print(f"Error: File missing: {e}")
+            quit(1)
         except ImportError as e:
-            raise Exception(f"Import error: {e}")
+            print(f"Import error: {e}")
+            quit(1)
         except PromptConstructionError as e:
-            raise Exception(f"Error during prompt construction: {e}")
+            print(f"Error during prompt construction: {e}")
+            quit(1)
+        except (ArgumentTypeError, ArgumentError) as e:
+            print(f"Argument parser error: {e}")
+            quit(1)
+        except (ValueError, TypeError) as e:
+            print(f"Error: {e}")
+            quit(1)
         except KeyboardInterrupt:
             print("\nKeyboard interrupt. Bye!")
             quit(0)
         except Exception as e:
-            raise Exception(f"Unexpected error: {e}")
-    except Exception as e:
-        print(e)
-        quit(1)
+            print(f"Unexpected error: {e}")
+            quit(1)
 
-
-class PromptConstructionError(Exception):
-    pass
+    return wrapper

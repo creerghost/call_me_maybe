@@ -1,21 +1,74 @@
+"""Entry point for the call_me_maybe application."""
+
 import argparse
-from .loader import Loader
+import json
+
 from .catch import catch
+from .decoder import ConstrainedDecoder
 from .llm import LLM
+from .loader import Loader
+from .models import FunctionCallResult, TestPrompt
+from .output import OutputWriter
+from .prompt import PromptConstructor
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--functions_definition", help="Path to "
-                                                   "functions definition "
-                                                   "json file")
-parser.add_argument("--input", help="Path to function calling json file")
-parser.add_argument("--output", help="Path to output file")
-parser.add_argument("--llm_path", help="Path to LLM")
-parser.add_argument("--llm_name", help="Name of LLM model (name of class)")
-args = parser.parse_args()
 
-loader = catch(Loader, args.functions_definition, args.input)
-llm = catch(LLM, args.llm_path, args.llm_name)
-# print(f"Vocab size: {llm.get_vocab_size()}")
-# print(f"Token for '{{': {llm.token2id.get('{', 'NOT FOUND')}")
-# print(f"Token for 'true': {llm.token2id.get('true', 'NOT FOUND')}")
-# print(f"Token ID 279 = '{llm.id2token.get(279, 'NOT FOUND')}'")
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--functions_definition", help="Path to functions "
+                        "definition json file")
+    parser.add_argument("--input", help="Path to function calling json file")
+    parser.add_argument("--output", help="Path to output file")
+    parser.add_argument("--llm_path", help="Path to LLM")
+    parser.add_argument("--llm_name", help="Name of LLM model (name of class)")
+    return parser
+
+
+def load_loader(functions_definition: str, input_path: str) -> Loader:
+    return Loader(functions_definition, input_path)
+
+
+def load_llm(llm_path: str, llm_name: str) -> LLM:
+    return LLM(llm_path, llm_name)
+
+
+def build_prompt(loader: Loader, test_prompt: TestPrompt) -> str:
+    return PromptConstructor.build_prompt(loader.fn_defs, test_prompt.prompt)
+
+
+def generate_result(decoder: ConstrainedDecoder,
+                    loader: Loader,
+                    test_prompt: TestPrompt) -> FunctionCallResult:
+    prompt = build_prompt(loader, test_prompt)
+    generated_text = decoder.generate(prompt, loader.fn_defs)
+    loads = json.loads(generated_text)
+
+    return FunctionCallResult(
+        prompt=test_prompt.prompt,
+        name=loads["name"],
+        parameters=loads["parameters"],
+    )
+
+
+def run_pipeline(args: argparse.Namespace) -> None:
+    """Run the full load → prompt → decode → write pipeline."""
+    loader = load_loader(args.functions_definition, args.input)
+
+    llm = load_llm(args.llm_path, args.llm_name)
+    decoder = ConstrainedDecoder(llm)
+
+    results = [
+        generate_result(decoder, loader, test_prompt)
+        for test_prompt in loader.test_prompts
+    ]
+
+    OutputWriter.write_output(results, args.output)
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+    run_pipeline(args)
+
+
+if __name__ == "__main__":
+    catch(main)
