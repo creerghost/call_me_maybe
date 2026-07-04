@@ -1,5 +1,6 @@
 import importlib
 import json
+from typing import Any
 
 
 class LLM():
@@ -23,8 +24,8 @@ class LLM():
     def get_vocab_size(self) -> int:
         return len(self.token2id)
 
-    def get_logits(self, input_ids: list[int]) -> list[float]:
+    def get_logits(self, input_ids: list[int]) -> list[float] | Any:
         return self.model.get_logits_from_input_ids(input_ids)
 
-    def encode(self, text: str) -> list[int]:
+    def encode(self, text: str) -> list[int] | Any:
         return self.model.encode(text).squeeze().tolist()

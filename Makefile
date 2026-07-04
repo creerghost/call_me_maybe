@@ -1,5 +1,6 @@
-export HF_HOME = /sgoinfre/vlnikola/.cache/huggingface
-export TORCH_HOME = /sgoinfre/vlnikola/.cache/torch
+# COMMENT if you are not in 42 prague clusters!
+# export HF_HOME = /sgoinfre/vlnikola/.cache/huggingface
+# export TORCH_HOME = /sgoinfre/vlnikola/.cache/torch
 
 UV = uv
 PYTHON = $(UV) run python

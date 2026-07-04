@@ -3,7 +3,7 @@ from .models import FunctionDefinition, TestPrompt
 
 
 class Loader():
-    def __init__(self, fdef_name, fcall_name) -> None:
+    def __init__(self, fdef_name: str, fcall_name: str) -> None:
         self.fn_defs: list[FunctionDefinition] = []
         self.test_prompts: list[TestPrompt] = []
         self._load(fdef_name, fcall_name)

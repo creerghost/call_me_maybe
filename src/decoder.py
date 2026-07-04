@@ -1,4 +1,7 @@
 from enum import Enum, auto
+from typing import Any
+from .llm import LLM
+from .models import FunctionDefinition
 
 
 class JSONState(Enum):
@@ -24,7 +27,7 @@ class JSONState(Enum):
 
 
 class ConstrainedDecoder:
-    def __init__(self, llm):
+    def __init__(self, llm: LLM) -> None:
         """
         Initalizes the LLM model.
 
@@ -80,8 +83,59 @@ class ConstrainedDecoder:
             JSONState.PARAM_VALUE: self._get_tokens_for_value,
         }
 
+    def generate(self, prompt: str,
+                 func_defs: list[FunctionDefinition]) -> Any | str:
+        """
+        Engine that talks to a model.
+
+        1. logits = self.llm.get_logits() -> What do you want to say next?
+        2. valid_ids = self.get_valid_tokens_for_state -> What is the model
+            allowed to say next?
+        3. logits[i] = float("-inf") -> Filter the all invalid tokens.
+        4. next_token_id = logits.index(max(logits)) -> Take the remaining
+            token with the highest probability.
+        5. current_prefix += token_str -> Add the text to our current_prefix.
+        6. state, current_prefix = self._transition_state() -> wipe the
+            current_prefix clean and move to the next logical state.
+        """
+        input_ids = self.llm.encode(prompt)
+
+        state = JSONState.START
+        generated_tokens: list[int] = []
+        current_prefix = ""
+        context = {
+            'func_defs': {f'"{f.name}"': f for f in func_defs},
+            'allowed_funcs': [f'"{f.name}"' for f in func_defs],
+            'allowed_params': [],
+            'param_types': {},
+            'current_param': None
+        }
+
+        while state != JSONState.DONE:
+            logits = self.llm.get_logits(input_ids + generated_tokens)
+            valid_ids = self.get_valid_tokens_for_state(state, current_prefix,
+                                                        context)
+
+            for i in range(len(logits)):
+                if i not in valid_ids:
+                    logits[i] = float("-inf")
+
+            next_token_id = logits.index(max(logits))
+            generated_tokens.append(next_token_id)
+
+            token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
+            current_prefix += token_str
+            state, current_prefix = self._transition_state(state,
+                                                           current_prefix,
+                                                           context)
+
+            if len(generated_tokens) > 200:
+                break
+
+        return self.llm.model.decode(generated_tokens)
+
     def get_valid_tokens_for_state(self, state: JSONState, current_prefix: str,
-                                   context: dict) -> list[int]:
+                                   context: dict[str, Any]) -> list[int]:
         """
         Decides what is the model allowed to say next.
         """
@@ -137,7 +191,7 @@ class ConstrainedDecoder:
         return list(valid_ids)
 
     def _get_tokens_for_value(self, current_prefix: str,
-                              context: dict) -> list[int]:
+                              context: dict[str, Any]) -> list[int]:
         param_type = context['param_types'].get(context['current_param'])
 
         if param_type == "string":
@@ -157,59 +211,9 @@ class ConstrainedDecoder:
             return valid
         return []
 
-    def generate(self, prompt: str, func_defs: list) -> str:
-        """
-        Engine that talks to a model.
-
-        1. logits = self.llm.get_logits() -> What do you want to say next?
-        2. valid_ids = self.get_valid_tokens_for_state -> What is the model
-            allowed to say next?
-        3. logits[i] = float("-inf") -> Filter the all invalid tokens.
-        4. next_token_id = logits.index(max(logits)) -> Take the remaining
-            token with the highest probability.
-        5. current_prefix += token_str -> Add the text to our current_prefix.
-        6. state, current_prefix = self._transition_state() -> wipe the
-            current_prefix clean and move to the next logical state.
-        """
-        input_ids = self.llm.encode(prompt)
-
-        state = JSONState.START
-        generated_tokens = []
-        current_prefix = ""
-        context = {
-            'func_defs': {f'"{f.name}"': f for f in func_defs},
-            'allowed_funcs': [f'"{f.name}"' for f in func_defs],
-            'allowed_params': [],
-            'param_types': {},
-            'current_param': None
-        }
-
-        while state != JSONState.DONE:
-            logits = self.llm.get_logits(input_ids + generated_tokens)
-            valid_ids = self.get_valid_tokens_for_state(state, current_prefix,
-                                                        context)
-
-            for i in range(len(logits)):
-                if i not in valid_ids:
-                    logits[i] = float("-inf")
-
-            next_token_id = logits.index(max(logits))
-            generated_tokens.append(next_token_id)
-
-            token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
-            current_prefix += token_str
-            state, current_prefix = self._transition_state(state,
-                                                           current_prefix,
-                                                           context)
-
-            if len(generated_tokens) > 200:
-                break
-
-        return self.llm.model.decode(generated_tokens)
-
     def _transition_state(self, state: JSONState,
                           current_prefix: str,
-                          context: dict) -> tuple[JSONState, str]:
+                          context: dict[str, Any]) -> tuple[JSONState, str]:
         """
         Once current_prefix exactly matches what we were expecting, we wipe
             current_prefix clean and move to the last logical state.
