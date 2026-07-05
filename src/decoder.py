@@ -44,6 +44,7 @@ class ConstrainedDecoder:
             method: "Find all token IDs that can help us spell the word "name".
         """
         self.llm = llm
+        self.clean_tokens = [(s.replace("Ġ", " "), id) for s, id in llm.token2id.items()]
         self.state_handlers = {
             # Static strings: p ... prefix, c ... context
             JSONState.START: lambda p, c: self._get_tokens_for_string(
@@ -122,8 +123,7 @@ class ConstrainedDecoder:
         # if expected="name" and prefix is "na", the remainder will be "me"
         remainder = expected[len(curr_prefix):]
 
-        for token_str, token_id in self.llm.token2id.items():
-            clean_str = token_str.replace("Ġ", " ")
+        for clean_str, token_id in self.clean_tokens:
             # edge case for very first iterations: empty string
             if not curr_prefix:
                 clean_str = clean_str.lstrip()
@@ -169,8 +169,7 @@ class ConstrainedDecoder:
             # if it has already written opening quote, return the entire
             # vocabulary, because string can contain any text
             valid: list[int] = []
-            for s, id in self.llm.token2id.items():
-                clean = s.replace("Ġ", " ")
+            for clean, id in self.clean_tokens:
                 # we only allow tokens that DO NOT contain a quote,
                 # EXCEPT for the pure quote token itself.
                 if clean.strip() == '"':
@@ -183,8 +182,7 @@ class ConstrainedDecoder:
             valid = []
             # at least one number generated
             has_digits = any(c.isdigit() for c in current_prefix)
-            for s, id in self.llm.token2id.items():
-                clean = s.replace("Ġ", " ")
+            for clean, id in self.clean_tokens:
                 if not current_prefix.strip():
                     clean = clean.lstrip()
                 if not clean:
@@ -257,8 +255,8 @@ class ConstrainedDecoder:
                 param_type = context['param_types'].get(  # type: ignore
                     context['current_param'])
                 if param_type in ("number", "integer"):
-                    for s, tid in self.llm.token2id.items():
-                        clean = s.replace("Ġ", " ").strip()
+                    for clean, tid in self.clean_tokens:
+                        clean = clean.strip()
                         if clean in (",", "}") and tid in valid_set:
                             logits[tid] += 10.0  # add artificial boost
 
