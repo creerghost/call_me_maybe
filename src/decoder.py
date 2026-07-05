@@ -2,6 +2,7 @@ from enum import Enum, auto
 from typing import Any
 from .llm import LLM
 from .models import FunctionDefinition
+from functools import lru_cache
 
 
 class JSONState(Enum):
@@ -105,6 +106,7 @@ class ConstrainedDecoder:
             return handler(current_prefix, context)
         return []
 
+    @lru_cache(maxsize=1024)
     def _get_tokens_for_string(self, expected: str,
                                curr_prefix: str) -> list[int]:
         """
@@ -236,7 +238,6 @@ class ConstrainedDecoder:
         }
 
         while state != JSONState.DONE:
-            logits = self.llm.get_logits(input_ids + generated_tokens)
             valid_ids = self.get_valid_tokens_for_state(state, current_prefix,
                                                         context)
             if not valid_ids:
@@ -244,31 +245,42 @@ class ConstrainedDecoder:
                       f"with prefix '{current_prefix}'. Breaking.")
                 break
 
-            valid_set = set(valid_ids)
-            for i in range(len(logits)):
-                if i not in valid_set:
-                    logits[i] = float("-inf")
+            # fast forward optimization: if only 1 token is valid,
+            # completely skip the expensive LLM forward pass and
+            # force the token immediately.
+            if len(valid_ids) == 1:
+                next_token_id = valid_ids[0]
+                token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
+                print(f"state={state.name}, valid_tokens=1, "
+                      f"chosen='{token_str}' (fast-forwarded - optimization)")
+            else:
+                # if multiple valid tokens exist, we must ask the LLM
+                logits = self.llm.get_logits(input_ids + generated_tokens)
+                valid_set = set(valid_ids)
+                for i in range(len(logits)):
+                    if i not in valid_set:
+                        logits[i] = float("-inf")
 
-            # logit boosting: if we are writing a number, boost the
-            # probability of ',' and '}'
-            if state == JSONState.PARAM_VALUE:
-                param_type = context['param_types'].get(  # type: ignore
-                    context['current_param'])
-                if param_type in ("number", "integer"):
-                    for clean, tid in self.clean_tokens:
-                        clean = clean.strip()
-                        if clean in (",", "}") and tid in valid_set:
-                            logits[tid] += 10.0  # add artificial boost
+                # logit boosting: if we are writing a number, boost the
+                # probability of ',' and '}'
+                if state == JSONState.PARAM_VALUE:
+                    param_type = context['param_types'].get(  # type: ignore
+                        context['current_param'])
+                    if param_type in ("number", "integer"):
+                        for clean, tid in self.clean_tokens:
+                            clean = clean.strip()
+                            if clean in (",", "}") and tid in valid_set:
+                                logits[tid] += 10.0  # add artificial boost
 
-            # take the token with maximum probability
-            next_token_id = logits.index(max(logits))
+                # take the token with maximum probability
+                next_token_id = logits.index(max(logits))
+                token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
+                print(f"state={state.name}, valid_tokens={len(valid_ids)}, "
+                      f"chosen='{token_str}'")
+
             generated_tokens.append(next_token_id)
-
-            token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
-            print(f"state={state.name}, valid_tokens={len(valid_ids)}, "
-                  f"chosen='{token_str}'")
-
             current_prefix += token_str
+            
             old_state = state
             state, current_prefix = self._transition_state(state,
                                                            current_prefix,
