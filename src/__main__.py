@@ -44,6 +44,7 @@ def generate_result(decoder: ConstrainedDecoder,
                     test_prompt: TestPrompt) -> FunctionCallResult:
     prompt = build_prompt(loader, test_prompt)
     generated_text = decoder.generate(prompt, loader.fn_defs)
+    print(generated_text)
     loads = json.loads(generated_text)
 
     return FunctionCallResult(

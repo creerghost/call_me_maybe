@@ -1,6 +1,6 @@
 # COMMENT if you are not in 42 prague clusters!
-# export HF_HOME = /sgoinfre/vlnikola/.cache/huggingface
-# export TORCH_HOME = /sgoinfre/vlnikola/.cache/torch
+export HF_HOME = /sgoinfre/vlnikola/.cache/huggingface
+export TORCH_HOME = /sgoinfre/vlnikola/.cache/torch
 
 # CHANGE THIS:
 FUNCTIONS_JSON = data/input/functions_definition.json

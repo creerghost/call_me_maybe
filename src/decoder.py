@@ -9,6 +9,10 @@ class JSONState(Enum):
     Thinks of states as "What are we expecting the LLM to write next?
     START: We are at the very beginning. We expect '{'
     NAME_KEY: We expect 'name', etc.
+
+    Each auto() assigns an unique integer to the state.
+    By looking at state, our code knows exactly which part of the JSON
+        object it is currently forcing the LLM to write.
     """
     START = auto()         # Expecting '{'
     NAME_KEY = auto()      # Expecting '"name"'
@@ -41,7 +45,7 @@ class ConstrainedDecoder:
         """
         self.llm = llm
         self.state_handlers = {
-            # Static strings
+            # Static strings: p ... prefix, c ... context
             JSONState.START: lambda p, c: self._get_tokens_for_string(
                 "{", p
             ),
@@ -77,11 +81,131 @@ class ConstrainedDecoder:
             JSONState.PARAM_COLON: lambda p, c: self._get_tokens_for_string(
                 ":", p
             ),
+            # If not parameters left, banningthe comma from being generated
+            # and forcing to write } instead.
             JSONState.PARAM_NEXT: lambda p, c: self._get_tokens_for_options(
-                [",", "}"], p
+                ([","] if len(c['allowed_params']) > 0 else []) + ["}"], p
             ),
             JSONState.PARAM_VALUE: self._get_tokens_for_value,
         }
+
+    def get_valid_tokens_for_state(self, state: JSONState, current_prefix: str,
+                                   context: dict[str, Any]) -> list[int]:
+        """
+        Checks if current_prefix is finished and we should move to the
+            next state.
+
+        handler: correct lambda function in self.state_handlers which is
+            executed.
+        """
+        handler = self.state_handlers.get(state)
+
+        if handler:
+            return handler(current_prefix, context)
+        return []
+
+    def _get_tokens_for_string(self, expected: str,
+                               curr_prefix: str) -> list[int]:
+        """
+        When calling this method, we ask to find tokens that make, for
+            example, string "{".
+        """
+        valid_ids: list[int] = []
+        # cleans LLM generated whitespace trails
+        curr_prefix = curr_prefix.lstrip()
+        # safe checks
+        if curr_prefix == expected:
+            return []
+
+        if not expected.startswith(curr_prefix):
+            return []
+        # if expected="name" and prefix is "na", the remainder will be "me"
+        remainder = expected[len(curr_prefix):]
+
+        for token_str, token_id in self.llm.token2id.items():
+            clean_str = token_str.replace("Ġ", " ")
+            # edge case for very first iterations: empty string
+            if not curr_prefix:
+                clean_str = clean_str.lstrip()
+
+            if not clean_str:  # if token is whitespace, we allow it
+                continue
+            # if the remainder is "me" and token is "m", we allow it
+            if remainder.startswith(clean_str):
+                valid_ids.append(token_id)
+        return valid_ids
+
+    def _get_tokens_for_options(self, options: list[str],
+                                current_prefix: str) -> list[int]:
+        """
+        Looks at the entire x-word vocabulary of the LLM.
+        If it expects 'name' and have already generated 'n',
+        this method returns the token IDs for 'ame', 'am', 'a', etc.
+
+        It additionaly checks against a list of possible strings:
+            options: list of available function names (for example, "fn_greet")
+        """
+        valid_ids = set()  # pythonic way to remove duplicates
+        current_prefix = current_prefix.strip()
+
+        for expected in options:
+            if expected.startswith(current_prefix):
+                tokens = self._get_tokens_for_string(expected, current_prefix)
+                valid_ids.update(tokens)
+
+        return list(valid_ids)
+
+    def _get_tokens_for_value(self, current_prefix: str,
+                              context: dict[str, Any]) -> list[int]:
+        """Return valid tokens for the current parameter value type."""
+        param_type = context['param_types'].get(context['current_param'])
+
+        if param_type == "string":
+            # if the LLM hasn't written anything yet (""), we force it to
+            # write the opening quote
+            if current_prefix.strip() == "":
+                return self._get_tokens_for_string('"', current_prefix)
+
+            # if it has already written opening quote, return the entire
+            # vocabulary, because string can contain any text
+            valid: list[int] = []
+            for s, id in self.llm.token2id.items():
+                clean = s.replace("Ġ", " ")
+                # we only allow tokens that DO NOT contain a quote,
+                # EXCEPT for the pure quote token itself.
+                if clean.strip() == '"':
+                    valid.append(id)
+                elif '"' not in clean:
+                    valid.append(id)
+            return valid
+
+        elif param_type in ("number", "integer"):
+            valid = []
+            # at least one number generated
+            has_digits = any(c.isdigit() for c in current_prefix)
+            for s, id in self.llm.token2id.items():
+                clean = s.replace("Ġ", " ")
+                if not current_prefix.strip():
+                    clean = clean.lstrip()
+                if not clean:
+                    continue
+                if not has_digits and any(c in ",}" for c in clean):
+                    continue
+                if len(context['allowed_params']) == 0 and ',' in clean:
+                    continue
+                # '{' to end the parameters list
+                # LLM loves to write placeholders as "..." so we ignore it
+                if all(c in "0123456789.-,}"
+                       for c in clean) and ".." not in clean:
+                    valid.append(id)
+            return valid
+
+        elif param_type == "boolean":
+            return self._get_tokens_for_options(
+                ["true", "false"], current_prefix
+            )
+
+        return []
 
     def generate(self, prompt: str,
                  func_defs: list[FunctionDefinition]) -> Any | str:
@@ -98,11 +222,14 @@ class ConstrainedDecoder:
         6. state, current_prefix = self._transition_state() -> wipe the
             current_prefix clean and move to the next logical state.
         """
+        # user prompt is turned into numbers
+        print(f"Prompt: {prompt}\n")
         input_ids = self.llm.encode(prompt)
-
         state = JSONState.START
         generated_tokens: list[int] = []
         current_prefix = ""
+        # context holds dynamic knowledge. We map function names to their
+        # actual definitions so we can look up their parameters later
         context = {
             'func_defs': {f'"{f.name}"': f for f in func_defs},
             'allowed_funcs': [f'"{f.name}"' for f in func_defs],
@@ -116,7 +243,8 @@ class ConstrainedDecoder:
             valid_ids = self.get_valid_tokens_for_state(state, current_prefix,
                                                         context)
             if not valid_ids:
-                print(f"[DEBUG] FATAL: No valid tokens for state {state.name} with prefix '{current_prefix}'. Breaking.")
+                print(f"FATAL: No valid tokens for state{state.name} "
+                      f"with prefix '{current_prefix}'. Breaking.")
                 break
 
             valid_set = set(valid_ids)
@@ -124,120 +252,40 @@ class ConstrainedDecoder:
                 if i not in valid_set:
                     logits[i] = float("-inf")
 
+            # logit boosting: if we are writing a number, boost the
+            # probability of ',' and '}'
+            if state == JSONState.PARAM_VALUE:
+                param_type = context['param_types'].get(  # type: ignore
+                    context['current_param'])
+                if param_type in ("number", "integer"):
+                    for s, tid in self.llm.token2id.items():
+                        clean = s.replace("Ġ", " ").strip()
+                        if clean in (",", "}") and tid in valid_set:
+                            logits[tid] += 10.0  # add artificial boost
+
+            # take the token with maximum probability
             next_token_id = logits.index(max(logits))
             generated_tokens.append(next_token_id)
 
             token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
-            print(f"[DEBUG] state={state.name}, valid_tokens={len(valid_ids)}, chosen='{token_str}'")
-            
+            print(f"state={state.name}, valid_tokens={len(valid_ids)}, "
+                  f"chosen='{token_str}'")
+
             current_prefix += token_str
             old_state = state
             state, current_prefix = self._transition_state(state,
                                                            current_prefix,
                                                            context)
             if old_state != state:
-                print(f"[DEBUG] transitioned to {state.name}")
+                print(f"transitioned to {state.name}")
+            else:
+                print(f"Staying in the same state {old_state}. "
+                      f"({old_state} == {state.name})")
 
             if len(generated_tokens) > 200:
                 break
 
         return self.llm.model.decode(generated_tokens)
-
-    def get_valid_tokens_for_state(self, state: JSONState, current_prefix: str,
-                                   context: dict[str, Any]) -> list[int]:
-        """
-        Decides what is the model allowed to say next.
-        """
-        handler = self.state_handlers.get(state)
-
-        if handler:
-            return handler(current_prefix, context)
-        return []
-
-    def _get_tokens_for_string(self, expected: str,
-                               curr_prefix: str) -> list[int]:
-        valid_ids: list[int] = []
-        curr_prefix = curr_prefix.lstrip()
-        if curr_prefix == expected:
-            return []
-            
-        if not expected.startswith(curr_prefix):
-            return []
-            
-        remainder = expected[len(curr_prefix):]
-
-        for token_str, token_id in self.llm.token2id.items():
-            clean_str = token_str.replace("Ġ", " ")
-            if not curr_prefix:
-                clean_str = clean_str.lstrip()
-                
-            if not clean_str:
-                continue
-                
-            if remainder.startswith(clean_str):
-                valid_ids.append(token_id)
-        return valid_ids
-
-    def _get_tokens_for_options(self, options: list[str],
-                                current_prefix: str) -> list[int]:
-        """
-        Looks at the entire x-word vocabulary of the LLM.
-        If it expects 'name' and have already generated 'n',
-        this method returns the token IDs for 'ame', 'am', 'a', etc.
-
-        It additionaly checks against a list of possible strings
-        (like all allowed function names).
-        """
-        valid_ids = set()
-        current_prefix = current_prefix.strip()
-
-        for expected in options:
-            if expected.startswith(current_prefix):
-                tokens = self._get_tokens_for_string(expected, current_prefix)
-                valid_ids.update(tokens)
-
-        return list(valid_ids)
-
-    def _get_tokens_for_value(self, current_prefix: str,
-                              context: dict[str, Any]) -> list[int]:
-        """Return valid tokens for the current parameter value type."""
-        param_type = context['param_types'].get(context['current_param'])
-
-        if param_type == "string":
-            if current_prefix.strip() == "":
-                return self._get_tokens_for_string('"', current_prefix)
-            return list(self.llm.token2id.values())
-
-        elif param_type == "number":
-            valid: list[int] = []
-            for s, tid in self.llm.token2id.items():
-                clean = s.replace("Ġ", " ")
-                if not current_prefix.strip():
-                    clean = clean.lstrip()
-                if not clean:
-                    continue
-                if all(c in "0123456789.-,}" for c in clean):
-                    valid.append(tid)
-            return valid
-
-        elif param_type == "integer":
-            valid = []
-            for s, tid in self.llm.token2id.items():
-                clean = s.replace("Ġ", " ")
-                if not current_prefix.strip():
-                    clean = clean.lstrip()
-                if not clean:
-                    continue
-                if all(c in "0123456789-,}" for c in clean):
-                    valid.append(tid)
-            return valid
-
-        elif param_type == "boolean":
-            return self._get_tokens_for_options(
-                ["true", "false"], current_prefix
-            )
-
-        return []
 
     def _transition_state(self, state: JSONState,
                           current_prefix: str,
@@ -249,8 +297,9 @@ class ConstrainedDecoder:
         E.g., if we were in START and current_prefix is now "{", we transition
             to NAME_KEY.
         """
-        print(f"[DEBUG _transition_state] checking state={state.name}, prefix='{current_prefix}'")
-        
+        print(f"_transition_state checking state={state.name}, "
+              f"prefix='{current_prefix}'")
+
         expected_strings = {
             JSONState.START: "{",
             JSONState.NAME_KEY: '"name"',
@@ -283,18 +332,18 @@ class ConstrainedDecoder:
         # 2. Handle Dynamic Options (like NAME_VALUE)
         elif state == JSONState.NAME_VALUE:
             if current_prefix.strip() in context['allowed_funcs']:
-                func_def = context['func_defs'][current_prefix.strip()]
-                context['allowed_params'] = [
-                    f'"{p}"' for p in func_def.parameters.keys()
-                ]
-                context['param_types'] = {
-                    f'"{p}"': v.type for p, v in func_def.parameters.items()
-                }
+                func_defs = context['func_defs'][current_prefix.strip()]
+                context['allowed_params'] = list(map(lambda p: f'"{p}"',
+                                                 func_defs.parameters.keys()))
+
+                context['param_types'] = list(map(lambda p: f'"{p}"',
+                                                 func_defs.parameters.items()))
                 return JSONState.COMMA_AFTER, ""
 
         elif state == JSONState.PARAM_KEY:
             if current_prefix.strip() in context['allowed_params']:
                 context['current_param'] = current_prefix.strip()
+                context['allowed_params'].remove(context['current_param'])
                 return JSONState.PARAM_COLON, ""
 
         elif state == JSONState.PARAM_VALUE:
