@@ -22,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--llm_name", help="Name of LLM model (name of class)")
     parser.add_argument("--visual", action="store_true",
                         help="Enable live CLI dashboard rendering")
+    parser.add_argument("--model", help="Path or name of the HF model to load")
     return parser
 
 
@@ -31,8 +32,8 @@ def load_loader(functions_definition: str, input_path: str) -> Loader:
 
 
 @catch
-def load_llm(llm_path: str, llm_name: str) -> LLM:
-    return LLM(llm_path, llm_name)
+def load_llm(llm_path: str, llm_name: str, hf_model: str | None) -> LLM:
+    return LLM(llm_path, llm_name, hf_model)
 
 
 @catch
@@ -67,7 +68,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     """Run the full load → prompt → decode → write pipeline."""
     loader = load_loader(args.functions_definition, args.input)
 
-    llm = load_llm(args.llm_path, args.llm_name)
+    llm = load_llm(args.llm_path, args.llm_name, args.model)
     decoder = ConstrainedDecoder(llm)
 
     results = []

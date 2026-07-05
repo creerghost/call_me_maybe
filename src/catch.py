@@ -2,6 +2,7 @@ from functools import wraps
 from json import JSONDecodeError
 from typing import Any, Callable
 from argparse import ArgumentError, ArgumentTypeError
+import traceback
 
 
 class PromptConstructionError(Exception):
@@ -52,6 +53,7 @@ def catch(fn: Callable[..., Any]) -> Callable[..., Any]:
             quit(0)
         except Exception as e:
             print(f"Unexpected error: {e}")
+            traceback.print_exc()
             quit(1)
 
     return wrapper

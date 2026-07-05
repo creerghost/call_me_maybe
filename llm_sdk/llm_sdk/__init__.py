@@ -60,8 +60,19 @@ class Small_LLM_Model:
             # ensure we have a pad token to keep batch helpers happy
             self._tokenizer.pad_token_id = self._tokenizer.eos_token_id
 
+        from transformers import AutoConfig
+        config = AutoConfig.from_pretrained(model_name, trust_remote_code=trust_remote_code)
+        
+        # Patch for Phi-3 models with newer transformers versions
+        if hasattr(config, "rope_scaling") and isinstance(config.rope_scaling, dict):
+            if config.rope_scaling.get("rope_type") == "default" or config.rope_scaling.get("type") == "default":
+                config.rope_scaling = None
+            elif "rope_type" in config.rope_scaling and "type" not in config.rope_scaling:
+                config.rope_scaling["type"] = config.rope_scaling["rope_type"]
+
         self._model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
             model_name,
+            config=config,
             torch_dtype=self._dtype,
             device_map="auto" if self._device == "cuda" else None,
             trust_remote_code=trust_remote_code,

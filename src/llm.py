@@ -4,16 +4,21 @@ from typing import Any
 
 
 class LLM():
-    def __init__(self, llm_path: str, llm_name: str) -> None:
+    def __init__(self, llm_path: str, llm_name: str,
+                 hf_model: str | None = None) -> None:
         self.llm_path = llm_path
         self.llm_name = llm_name
+        self.hf_model = hf_model
         self._init_llm()
         self._load_vocab()
 
     def _init_llm(self) -> None:
         module = importlib.import_module(self.llm_path)
         model_class = getattr(module, self.llm_name)
-        self.model = model_class()
+        if self.hf_model:
+            self.model = model_class(model_name=self.hf_model)
+        else:
+            self.model = model_class()
 
     def _load_vocab(self) -> None:
         vocab_path = self.model.get_path_to_vocab_file()
