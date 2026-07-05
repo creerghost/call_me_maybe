@@ -20,6 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", help="Path to output file")
     parser.add_argument("--llm_path", help="Path to LLM")
     parser.add_argument("--llm_name", help="Name of LLM model (name of class)")
+    parser.add_argument("--visual", action="store_true",
+                        help="Enable live CLI dashboard rendering")
     return parser
 
 
@@ -41,12 +43,16 @@ def build_prompt(loader: Loader, test_prompt: TestPrompt) -> str:
 @catch
 def generate_result(decoder: ConstrainedDecoder,
                     loader: Loader,
-                    test_prompt: TestPrompt) -> FunctionCallResult:
+                    test_prompt: TestPrompt,
+                    visualize: bool) -> FunctionCallResult:
     prompt = build_prompt(loader, test_prompt)
-    print(f"User prompt: {test_prompt.model_dump().values()}")
-    print("\n" + "=" * 60)
-    generated_text = decoder.generate(prompt, loader.fn_defs)
-    print(f"Output: {generated_text}\n")
+    if not visualize:
+        print(f"User prompt: {test_prompt.model_dump().values()}")
+        print("\n" + "=" * 60)
+    generated_text = decoder.generate(prompt, test_prompt.prompt,
+                                      loader.fn_defs, visualize)
+    if not visualize:
+        print(f"Output: {generated_text}\n")
     loads = json.loads(generated_text)
 
     return FunctionCallResult(
@@ -66,9 +72,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     results = []
     for i, test_prompt in enumerate(loader.test_prompts):
-        print("=" * 60 + "\n")
-        print(f"{i + 1}. prompt")
-        res = generate_result(decoder, loader, test_prompt)
+        if not args.visual:
+            print("=" * 60 + "\n")
+            print(f"{i + 1}. prompt")
+        res = generate_result(decoder, loader, test_prompt, args.visual)
         results.append(res)
         OutputWriter.write_output(results, args.output)
 

@@ -45,7 +45,13 @@ class ConstrainedDecoder:
             method: "Find all token IDs that can help us spell the word "name".
         """
         self.llm = llm
-        self.clean_tokens = [(s.replace("Ġ", " "), id) for s, id in llm.token2id.items()]
+        self.clean_tokens = [(s.replace("Ġ", " "), id)
+                             for s, id in llm.token2id.items()]
+        # variable for logit boosting (before I tried to find ',' or '}'
+        # over 150,000 times in self.clean_tokens)
+        # instead of looping on every num generation step, it's checking in set
+        self.stop_token_ids = {id for clean, id in self.clean_tokens
+                               if clean.strip() in (",", "}")}
         self.state_handlers = {
             # Static strings: p ... prefix, c ... context
             JSONState.START: lambda p, c: self._get_tokens_for_string(
@@ -213,8 +219,9 @@ class ConstrainedDecoder:
 
         return []
 
-    def generate(self, prompt: str,
-                 func_defs: list[FunctionDefinition]) -> Any | str:
+    def generate(self, prompt: str, user_question: str,
+                 func_defs: list[FunctionDefinition],
+                 visualize: bool = False) -> Any | str:
         """
         Engine that talks to a model.
 
@@ -233,6 +240,7 @@ class ConstrainedDecoder:
         state = JSONState.START
         generated_tokens: list[int] = []
         current_prefix = ""
+        full_json_string = ""
         # context holds dynamic knowledge. We map function names to their
         # actual definitions so we can look up their parameters later
         context = {
@@ -257,15 +265,24 @@ class ConstrainedDecoder:
             if len(valid_ids) == 1:
                 next_token_id = valid_ids[0]
                 token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
-                print(f"[GENERATE] state={state.name}, valid_tokens=1, "
-                      f"chosen='{token_str}' (fast-forwarded - optimization)")
+                fast_forwarded = True
+                if not visualize:
+                    print(f"[GENERATE] state={state.name}, valid_tokens=1, "
+                          f"chosen='{token_str}' "
+                          f"(fast-forwarded - optimization)")
             else:
+                fast_forwarded = False
                 # if multiple valid tokens exist, we must ask the LLM
                 logits = self.llm.get_logits(input_ids + generated_tokens)
-                valid_set = set(valid_ids)
-                for i in range(len(logits)):
-                    if i not in valid_set:
-                        logits[i] = float("-inf")
+
+                # C-styled array masking
+                # before I looped 150,000 times checking if i not in valid_set
+                # now I have 1 list of -inf floats and I need to iterate over
+                # 5 or 6 valid tokens
+                new_logits = [float("-inf")] * len(logits)
+                for vid in valid_ids:
+                    new_logits[vid] = logits[vid]
+                logits = new_logits
 
                 # logit boosting: if we are writing a number, boost the
                 # probability of ',' and '}'
@@ -273,29 +290,38 @@ class ConstrainedDecoder:
                     param_type = context['param_types'].get(  # type: ignore
                         context['current_param'])
                     if param_type in ("number", "integer"):
-                        for clean, tid in self.clean_tokens:
-                            clean = clean.strip()
-                            if clean in (",", "}") and tid in valid_set:
-                                logits[tid] += 10.0  # add artificial boost
+                        for id in self.stop_token_ids:
+                            if logits[id] > float("-inf"):
+                                logits[id] += 10.0
 
                 # take the token with maximum probability
                 next_token_id = logits.index(max(logits))
                 token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
-                print(f"[GENERATE] state={state.name}, valid_tokens={len(valid_ids)}, "
-                      f"chosen='{token_str}'")
+                if not visualize:
+                    print(f"[GENERATE] state={state.name}, "
+                          f"valid_tokens={len(valid_ids)}, "
+                          f"chosen='{token_str}'")
 
             generated_tokens.append(next_token_id)
             current_prefix += token_str
-            
+            full_json_string += token_str
+
             old_state = state
             state, current_prefix = self._transition_state(state,
                                                            current_prefix,
                                                            context)
-            if old_state != state:
-                print(f"[GENERATE] transitioned to {state.name}\n")
+
+            if visualize:
+                self._render_dashboard(user_question, state, old_state,
+                                       fast_forwarded, valid_ids, token_str,
+                                       full_json_string)
             else:
-                print(f"[GENERATE] Staying in the same state {old_state}. "
-                      f"({old_state} == {state.name})")
+                if old_state != state:
+                    print(f"[GENERATE] transitioned to {state.name}\n")
+                else:
+                    print(f"[GENERATE] Staying in the same state "
+                          f"{old_state.name}. "
+                          f"({old_state.name} == {state.name})")
 
             if len(generated_tokens) > 200:
                 break
@@ -312,8 +338,8 @@ class ConstrainedDecoder:
         E.g., if we were in START and current_prefix is now "{", we transition
             to NAME_KEY.
         """
-        print(f"[TRANSITION_STATE] checking state={state.name}, "
-              f"prefix='{current_prefix}'")
+        # print(f"[TRANSITION_STATE] state={state.name}, "
+        #       f"prefix='{current_prefix}'")
 
         expected_strings = {
             JSONState.START: "{",
@@ -386,3 +412,29 @@ class ConstrainedDecoder:
 
         # 3. If we are not done with this state, stay in the same state
         return state, current_prefix
+
+    def _render_dashboard(self, user_question: str, state: JSONState,
+                          old_state: JSONState, fast_forwarded: bool,
+                          valid_ids: list[int], token_str: str,
+                          full_json_string: str) -> None:
+        dashboard = "\033[2J\033[H"  # clear screen & cursor home
+        dashboard += ("\033[96m=== Constrained JSON Decoder "
+                      "===\033[0m\n\n")
+        dashboard += f"\033[93mUser Prompt:\033[0m {user_question}\n\n"
+        dashboard += (f"\033[92mCurrent State:\033[0m {state.name} "
+                      f"(was {old_state.name})\n")
+
+        if fast_forwarded:
+            dashboard += ("\033[94mAllowed Tokens:\033[0m 1 "
+                          "(Fast-Forwarding!)\n")
+        else:
+            dashboard += (f"\033[94mAllowed Tokens:\033[0m "
+                          f"{len(valid_ids)}\n")
+
+        dashboard += f"\033[95mGenerated Token:\033[0m '{token_str}'\n\n"
+
+        colored_json = full_json_string.replace('"', '\033[36m"\033[0m')
+        colored_json = colored_json.replace(':', '\033[33m:\033[0m')
+        dashboard += f"{colored_json}\n"
+
+        print(dashboard, end="", flush=True)

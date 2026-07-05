@@ -15,8 +15,6 @@ LLM_NAME = Small_LLM_Model
 # user required arguments and then run the script with those arguments
 
 # TODO: add --model argument
-
-# TODO: add --visual argument to visualize the function calling process
 UV = uv
 PYTHON = $(UV) run python
 
@@ -34,6 +32,9 @@ install:
 
 run: install
 	$(PYTHON) -m src $(ARGS)
+
+run-visual: install
+	$(PYTHON) -m src $(ARGS) --visual
 
 debug:
 	$(PYTHON) -m pdb src/__main__.py
