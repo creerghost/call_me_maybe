@@ -88,7 +88,12 @@ class ConstrainedDecoder:
             JSONState.PARAM_NEXT: lambda p, c: self._get_tokens_for_options(
                 ([","] if len(c['allowed_params']) > 0 else []) + ["}"], p
             ),
-            JSONState.PARAM_VALUE: self._get_tokens_for_value,
+            # Unpacking the content so value function will becoma hashable
+            JSONState.PARAM_VALUE: lambda p, c: self._get_tokens_for_value(
+                p,
+                c['param_types'].get(c['current_param']),
+                len(c['allowed_params'])
+            ),
         }
 
     def get_valid_tokens_for_state(self, state: JSONState, current_prefix: str,
@@ -157,48 +162,49 @@ class ConstrainedDecoder:
 
         return list(valid_ids)
 
-    def _get_tokens_for_value(self, current_prefix: str,
-                              context: dict[str, Any]) -> list[int]:
-        """Return valid tokens for the current parameter value type."""
-        param_type = context['param_types'].get(context['current_param'])
+    @lru_cache(maxsize=1024)
+    def _get_string_tokens(self) -> list[int]:
+        valid: list[int] = []
+        for clean, id in self.clean_tokens:
+            if clean.strip() == '"':
+                valid.append(id)
+            elif '"' not in clean:
+                valid.append(id)
+        return valid
 
+    @lru_cache(maxsize=1024)
+    def _get_number_tokens(self, is_empty_prefix: bool, has_digits: bool,
+                           allowed_params_len: int) -> list[int]:
+        valid: list[int] = []
+        for clean, id in self.clean_tokens:
+            if is_empty_prefix:
+                clean = clean.lstrip()
+            if not clean:
+                continue
+            if not has_digits and any(c in ",}" for c in clean):
+                continue
+            if allowed_params_len == 0 and ',' in clean:
+                continue
+            if all(c in "0123456789.-,}"
+                   for c in clean) and ".." not in clean:
+                valid.append(id)
+        return valid
+
+    def _get_tokens_for_value(self, current_prefix: str,
+                              param_type: str | None,
+                              allowed_params_len: int) -> list[int]:
+        """Return valid tokens for the current parameter value type."""
         if param_type == "string":
-            # if the LLM hasn't written anything yet (""), we force it to
-            # write the opening quote
             if current_prefix.strip() == "":
                 return self._get_tokens_for_string('"', current_prefix)
-
-            # if it has already written opening quote, return the entire
-            # vocabulary, because string can contain any text
-            valid: list[int] = []
-            for clean, id in self.clean_tokens:
-                # we only allow tokens that DO NOT contain a quote,
-                # EXCEPT for the pure quote token itself.
-                if clean.strip() == '"':
-                    valid.append(id)
-                elif '"' not in clean:
-                    valid.append(id)
-            return valid
+            return self._get_string_tokens()
 
         elif param_type in ("number", "integer"):
-            valid = []
-            # at least one number generated
-            has_digits = any(c.isdigit() for c in current_prefix)
-            for clean, id in self.clean_tokens:
-                if not current_prefix.strip():
-                    clean = clean.lstrip()
-                if not clean:
-                    continue
-                if not has_digits and any(c in ",}" for c in clean):
-                    continue
-                if len(context['allowed_params']) == 0 and ',' in clean:
-                    continue
-                # '{' to end the parameters list
-                # LLM loves to write placeholders as "..." so we ignore it
-                if all(c in "0123456789.-,}"
-                       for c in clean) and ".." not in clean:
-                    valid.append(id)
-            return valid
+            return self._get_number_tokens(
+                current_prefix.strip() == "",
+                any(c.isdigit() for c in current_prefix),
+                allowed_params_len
+            )
 
         elif param_type == "boolean":
             return self._get_tokens_for_options(
@@ -251,7 +257,7 @@ class ConstrainedDecoder:
             if len(valid_ids) == 1:
                 next_token_id = valid_ids[0]
                 token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
-                print(f"state={state.name}, valid_tokens=1, "
+                print(f"[GENERATE] state={state.name}, valid_tokens=1, "
                       f"chosen='{token_str}' (fast-forwarded - optimization)")
             else:
                 # if multiple valid tokens exist, we must ask the LLM
@@ -275,7 +281,7 @@ class ConstrainedDecoder:
                 # take the token with maximum probability
                 next_token_id = logits.index(max(logits))
                 token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
-                print(f"state={state.name}, valid_tokens={len(valid_ids)}, "
+                print(f"[GENERATE] state={state.name}, valid_tokens={len(valid_ids)}, "
                       f"chosen='{token_str}'")
 
             generated_tokens.append(next_token_id)
@@ -286,9 +292,9 @@ class ConstrainedDecoder:
                                                            current_prefix,
                                                            context)
             if old_state != state:
-                print(f"transitioned to {state.name}")
+                print(f"[GENERATE] transitioned to {state.name}\n")
             else:
-                print(f"Staying in the same state {old_state}. "
+                print(f"[GENERATE] Staying in the same state {old_state}. "
                       f"({old_state} == {state.name})")
 
             if len(generated_tokens) > 200:
@@ -306,7 +312,7 @@ class ConstrainedDecoder:
         E.g., if we were in START and current_prefix is now "{", we transition
             to NAME_KEY.
         """
-        print(f"_transition_state checking state={state.name}, "
+        print(f"[TRANSITION_STATE] checking state={state.name}, "
               f"prefix='{current_prefix}'")
 
         expected_strings = {
