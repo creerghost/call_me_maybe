@@ -31,5 +31,14 @@
   },
   {
     "prompt": "Substitute the word 'cat' with 'dog' in 'The cat sat on the mat with another cat'"
+  },
+  {
+    "prompt": "Distance from New York to Los Angeles?"
+  },
+  {
+    "prompt": "Say 67."
+  },
+  {
+    "prompt": "Какое расстояние от Москвы до Праги?"
   }
 ]

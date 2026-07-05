@@ -43,6 +43,7 @@ def generate_result(decoder: ConstrainedDecoder,
                     loader: Loader,
                     test_prompt: TestPrompt) -> FunctionCallResult:
     prompt = build_prompt(loader, test_prompt)
+    print(f"User prompt: {test_prompt.model_dump().values()}")
     generated_text = decoder.generate(prompt, loader.fn_defs)
     print(generated_text)
     loads = json.loads(generated_text)
@@ -62,12 +63,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
     llm = load_llm(args.llm_path, args.llm_name)
     decoder = ConstrainedDecoder(llm)
 
-    results = [
-        generate_result(decoder, loader, test_prompt)
-        for test_prompt in loader.test_prompts
-    ]
-
-    OutputWriter.write_output(results, args.output)
+    results = []
+    for test_prompt in loader.test_prompts:
+        res = generate_result(decoder, loader, test_prompt)
+        results.append(res)
+        OutputWriter.write_output(results, args.output)
 
 
 @catch

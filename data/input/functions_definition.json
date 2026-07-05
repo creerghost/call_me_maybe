@@ -67,5 +67,32 @@
     "returns": {
       "type": "string"
     }
+  },
+  {
+    "name": "fn_city_distances",
+    "description": "Find a distance between two cities.",
+    "parameters": {
+      "city_1": {
+        "type": "string"
+      },
+      "city_2": {
+        "type": "string"
+      }
+    },
+    "returns": {
+      "type": "number"
+    }
+  },
+  {
+    "name": "fn_write_number",
+    "description": "Write a number.",
+    "parameters": {
+      "number": {
+        "type": "number"
+      }
+    },
+    "returns": {
+      "type": "string"
+    }
   }
 ]

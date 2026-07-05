@@ -223,7 +223,6 @@ class ConstrainedDecoder:
             current_prefix clean and move to the next logical state.
         """
         # user prompt is turned into numbers
-        print(f"Prompt: {prompt}\n")
         input_ids = self.llm.encode(prompt)
         state = JSONState.START
         generated_tokens: list[int] = []
@@ -333,11 +332,12 @@ class ConstrainedDecoder:
         elif state == JSONState.NAME_VALUE:
             if current_prefix.strip() in context['allowed_funcs']:
                 func_defs = context['func_defs'][current_prefix.strip()]
-                context['allowed_params'] = list(map(lambda p: f'"{p}"',
-                                                 func_defs.parameters.keys()))
-
-                context['param_types'] = list(map(lambda p: f'"{p}"',
-                                                 func_defs.parameters.items()))
+                context['allowed_params'] = [
+                    f'"{p}"' for p in func_defs.parameters.keys()
+                ]
+                context['param_types'] = {
+                    f'"{p}"': v.type for p, v in func_defs.parameters.items()
+                }
                 return JSONState.COMMA_AFTER, ""
 
         elif state == JSONState.PARAM_KEY:
