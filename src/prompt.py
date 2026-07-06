@@ -1,6 +1,8 @@
-from .models import FunctionDefinition
+from pydantic import ValidationError
+from .models import FunctionDefinition, FunctionParameter
 from .catch import PromptConstructionError
 import pytest
+
 
 class PromptConstructor():
     @staticmethod
@@ -37,6 +39,58 @@ class PromptConstructor():
             f"{user_request_block}"
         )
 
+def test_build_prompt_valid() -> None:
+    param = FunctionParameter(type="number")
+    fd = FunctionDefinition(
+        name="fn_add",
+        description="Adds two numbers",
+        parameters={"a": param},
+        returns=param
+    )
+    prompt = "What is 5 + 5?"
+    res = PromptConstructor.build_prompt([fd], prompt)
+    assert "Available functions:" in res
+    assert "Name: fn_add" in res
+    assert f"User request: \n{prompt}" in res
+
+def test_build_prompt_empty_functions() -> None:
+    prompt = "What is 5 + 5?"
+    with pytest.raises(PromptConstructionError):
+        PromptConstructor.build_prompt([], prompt)
+
+def test_build_prompt_empty_user_prompt() -> None:
+    param = FunctionParameter(type="number")
+    fd = FunctionDefinition(
+        name="fn_add",
+        description="Adds two numbers",
+        parameters={"a": param},
+        returns=param
+    )
+    with pytest.raises(PromptConstructionError):
+        PromptConstructor.build_prompt([fd], "    ")
+
+def test_build_prompt_wrong_functions() -> None:
+    param = FunctionParameter(type="number")
+    prompt = "What is 5 + 5?"
+    fd1 = FunctionDefinition(
+        name="fn_add",
+        description="Adds two numbers",
+        parameters={"a": param},
+        returns=param
+    )
+    with pytest.raises(ValidationError):
+        fd2 = FunctionDefinition(
+        name="fn_add",
+        description="Adds two numbers",
+        parameters={"a": "string"},
+        returns=param
+    )
+    # this line will never run tho
+        PromptConstructor.build_prompt([fd1, fd2], prompt)
+
 
 if __name__ == "__main__":
-    pass
+    from pathlib import Path
+    path_obj = Path(__file__)
+    print (f"\n=== TESTING {path_obj.stem}.py ===\n")
+    pytest.main(["-v", "-o", "python_classes=*Suite", __file__])
