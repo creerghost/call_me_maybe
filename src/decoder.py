@@ -237,10 +237,13 @@ class ConstrainedDecoder:
         """
         # user prompt is turned into numbers
         input_ids = self.llm.encode(prompt)
+
         state = JSONState.START
         generated_tokens: list[int] = []
         current_prefix = ""
         full_json_string = ""
+        state_token_count = 0
+
         # context holds dynamic knowledge. We map function names to their
         # actual definitions so we can look up their parameters later
         context = {
@@ -250,7 +253,6 @@ class ConstrainedDecoder:
             'param_types': {},
             'current_param': None
         }
-        state_token_count = 0
 
         while state != JSONState.DONE:
             valid_ids = self.get_valid_tokens_for_state(state, current_prefix,
@@ -305,6 +307,23 @@ class ConstrainedDecoder:
                         for id in self.stop_token_ids:
                             if logits[id] > float("-inf"):
                                 logits[id] += 10.0
+                    # boost quotes for strings
+                    elif param_type == "string":
+                        quote_ids = [id for clean, id in self.clean_tokens
+                                     if clean.strip() == '"']
+                        for q_id in quote_ids:
+                            # basically, if u don't know what to talk
+                            # just stfu!
+                            if logits[q_id] > float("-inf") and \
+                                    state_token_count > 3:
+                                logits[q_id] += 5.0
+
+                # # Error recovery: repetition penalty
+                # # looping over last 15 tokens generated
+                # for prev_id in generated_tokens[-10:]:
+                #     # if previous option is valid right now, subtract a penalty
+                #     if logits[prev_id] > float("-inf"):
+                #         logits[prev_id] -= 0.5
 
                 # take the token with maximum probability
                 next_token_id = logits.index(max(logits))
