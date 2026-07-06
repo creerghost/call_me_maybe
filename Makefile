@@ -14,7 +14,7 @@ LLM_NAME = Small_LLM_Model
 # TODO: add a target to run manually where we will ask
 # user required arguments and then run the script with those arguments
 
-MODEL_PATH = microsoft/Phi-3-mini-4k-instruct
+MODEL_PATH = TinyLlama/TinyLlama-1.1B-Chat-v1.0
 UV = uv
 PYTHON = $(UV) run python
 

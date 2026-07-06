@@ -21,9 +21,7 @@ class LLM():
             self.model = model_class()
 
     def _load_vocab(self) -> None:
-        vocab_path = self.model.get_path_to_vocab_file()
-        with open(vocab_path, "r") as f:
-            self.token2id = json.load(f)
+        self.token2id = self.model._tokenizer.get_vocab()
         self.id2token = {v: k for k, v in self.token2id.items()}
 
     def get_vocab_size(self) -> int:

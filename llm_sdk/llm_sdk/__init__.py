@@ -64,7 +64,7 @@ class Small_LLM_Model:
         config = AutoConfig.from_pretrained(model_name, trust_remote_code=trust_remote_code)
         
         # Patch for Phi-3 models with newer transformers versions
-        if hasattr(config, "rope_scaling") and isinstance(config.rope_scaling, dict):
+        if getattr(config, "model_type", "").lower() == "phi3" and hasattr(config, "rope_scaling") and isinstance(config.rope_scaling, dict):
             if config.rope_scaling.get("rope_type") == "default" or config.rope_scaling.get("type") == "default":
                 config.rope_scaling = None
             elif "rope_type" in config.rope_scaling and "type" not in config.rope_scaling:

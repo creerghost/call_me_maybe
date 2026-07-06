@@ -47,6 +47,7 @@ def catch(fn: Callable[..., Any]) -> Callable[..., Any]:
             quit(1)
         except (ValueError, TypeError) as e:
             print(f"Error: {e}")
+            traceback.print_exc()
             quit(1)
         except KeyboardInterrupt:
             print("\nKeyboard interrupt. Bye!")
