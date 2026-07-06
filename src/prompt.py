@@ -1,6 +1,7 @@
 from pydantic import ValidationError
 from .models import FunctionDefinition, FunctionParameter
 from .catch import PromptConstructionError
+from typing import Any
 import pytest
 
 
@@ -39,6 +40,7 @@ class PromptConstructor():
             f"{user_request_block}"
         )
 
+
 def test_build_prompt_valid() -> None:
     param = FunctionParameter(type="number")
     fd = FunctionDefinition(
@@ -53,10 +55,12 @@ def test_build_prompt_valid() -> None:
     assert "Name: fn_add" in res
     assert f"User request: \n{prompt}" in res
 
+
 def test_build_prompt_empty_functions() -> None:
     prompt = "What is 5 + 5?"
     with pytest.raises(PromptConstructionError):
         PromptConstructor.build_prompt([], prompt)
+
 
 def test_build_prompt_empty_user_prompt() -> None:
     param = FunctionParameter(type="number")
@@ -69,6 +73,7 @@ def test_build_prompt_empty_user_prompt() -> None:
     with pytest.raises(PromptConstructionError):
         PromptConstructor.build_prompt([fd], "    ")
 
+
 def test_build_prompt_wrong_functions() -> None:
     param = FunctionParameter(type="number")
     prompt = "What is 5 + 5?"
@@ -79,12 +84,13 @@ def test_build_prompt_wrong_functions() -> None:
         returns=param
     )
     with pytest.raises(ValidationError):
+        invalid_params: Any = {"a": "string"}
         fd2 = FunctionDefinition(
-        name="fn_add",
-        description="Adds two numbers",
-        parameters={"a": "string"},
-        returns=param
-    )
+            name="fn_add",
+            description="Adds two numbers",
+            parameters=invalid_params,
+            returns=param
+        )
     # this line will never run tho
         PromptConstructor.build_prompt([fd1, fd2], prompt)
 
@@ -92,5 +98,5 @@ def test_build_prompt_wrong_functions() -> None:
 if __name__ == "__main__":
     from pathlib import Path
     path_obj = Path(__file__)
-    print (f"\n=== TESTING {path_obj.stem}.py ===\n")
+    print(f"\n=== TESTING {path_obj.stem}.py ===\n")
     pytest.main(["-v", "-o", "python_classes=*Suite", __file__])

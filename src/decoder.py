@@ -90,7 +90,8 @@ class ConstrainedDecoder:
                 ":", p
             ),
             # If not parameters left, banning the comma from being generated
-            # and forcing to write } instead. If parameters are left, force comma.
+            # and forcing to write } instead.
+            # If parameters are left, force comma.
             JSONState.PARAM_NEXT: lambda p, c: self._get_tokens_for_options(
                 ([","] if len(c['allowed_params']) > 0 else ["}"]), p
             ),
@@ -259,9 +260,12 @@ class ConstrainedDecoder:
                                                         context)
             # if model is stuck in this state -> counter gets too high ->
             # overwrite valid_ids to only allow the '"' token
+            param_types = context.get('param_types', {})
+            current_param = context.get('current_param')
             if state == JSONState.PARAM_VALUE and \
-                    context['param_types'].get(context['current_param']) \
-                    == "string":
+                    isinstance(param_types, dict) and \
+                    isinstance(current_param, str) and \
+                    param_types.get(current_param) == "string":
                 if state_token_count > 20:
                     print("\n[ERROR RECOVERY] String length exceeded limit."
                           " Forcing closing quote.")
@@ -321,7 +325,7 @@ class ConstrainedDecoder:
                 # # Error recovery: repetition penalty
                 # # looping over last 15 tokens generated
                 # for prev_id in generated_tokens[-10:]:
-                #     # if previous option is valid right now, subtract a penalty
+                #     # if prev option is valid right now, subtract penalty
                 #     if logits[prev_id] > float("-inf"):
                 #         logits[prev_id] -= 0.5
 
