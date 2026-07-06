@@ -85,7 +85,7 @@
   },
   {
     "name": "fn_write_number",
-    "description": "Write a number.",
+    "description": "Write a number that user requires. Doesn't do mathematical operations!",
     "parameters": {
       "number": {
         "type": "number"
