@@ -1,6 +1,6 @@
 from .models import FunctionDefinition
 from .catch import PromptConstructionError
-
+import pytest
 
 class PromptConstructor():
     @staticmethod
@@ -36,3 +36,7 @@ class PromptConstructor():
             f"{functions_block}\n\n"
             f"{user_request_block}"
         )
+
+
+if __name__ == "__main__":
+    pass

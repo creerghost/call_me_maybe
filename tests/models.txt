@@ -1,0 +1,18 @@
+[1m=============================================================================== test session starts ===============================================================================[0m
+platform linux -- Python 3.13.1, pytest-9.1.1, pluggy-1.6.0 -- /sgoinfre/vlnikola/call_me_maybe/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /sgoinfre/vlnikola/call_me_maybe
+configfile: pyproject.toml
+plugins: anyio-4.14.1
+[1mcollecting ... [0m[1mcollected 2 items                                                                                                                                                                 [0m
+
+src/models.py::test_function_parameter_valid [32mPASSED[0m[33m                                                                                                                         [ 50%][0m
+src/models.py::test_function_parameter_invalid [32mPASSED[0m[33m                                                                                                                       [100%][0m
+
+[33m================================================================================ warnings summary =================================================================================[0m
+src/models.py:16
+  /sgoinfre/vlnikola/call_me_maybe/src/models.py:16: PytestCollectionWarning: cannot collect test class 'TestPrompt' because it has a __init__ constructor (from: src/models.py)
+    class TestPrompt(BaseModel):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+[33m========================================================================== [32m2 passed[0m, [33m[1m1 warning[0m[33m in 0.02s[0m[33m ===========================================================================[0m
