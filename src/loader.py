@@ -17,6 +17,9 @@ class Loader():
             with open(fdef, "r") as f:
                 json_defs = json.load(f)
             self.fn_defs = [FunctionDefinition(**d) for d in json_defs]
+            if not self.fn_defs:
+                raise LoaderError("Json is empty.")
+
         except FileNotFoundError:
             raise LoaderError(f"File not found: {fdef}")
         except json.JSONDecodeError as e:
@@ -28,6 +31,8 @@ class Loader():
             with open(fcall, "r") as f:
                 json_prompts = json.load(f)
             self.test_prompts = [TestPrompt(**p) for p in json_prompts]
+            if not self.test_prompts:
+                raise LoaderError("Json is empty.")
         except FileNotFoundError:
             raise LoaderError(f"File not found: {fcall}")
         except json.JSONDecodeError as e:
@@ -74,12 +79,19 @@ def test_loader_file_not_found() -> None:
     with pytest.raises(LoaderError):
         Loader("does_not_exist.json", "data/input/function_calling_tests.json")
 
+
 # tmp path is built-in pytest variable
-
-
 def test_loader_broken_json(tmp_path: Path) -> None:
     broken_file: Path = tmp_path / "broken.json"
     broken_file.write_text("{ this is not a valid json object }")
+
+    with pytest.raises(LoaderError):
+        Loader(str(broken_file), str(broken_file))
+
+
+def test_loader_broken_json_empty(tmp_path: Path) -> None:
+    broken_file: Path = tmp_path / "broken.json"
+    broken_file.write_text("{}")
 
     with pytest.raises(LoaderError):
         Loader(str(broken_file), str(broken_file))
