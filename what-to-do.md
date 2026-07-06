@@ -1,6 +1,6 @@
 # Advanced error recovery (Bonus part)
 
-- Production-grade constrained decoders often implement the advanced error recovery -- such as setting hard limits on maximum string lengths, or backtracking when the logit probability fo the closing token drops too low
+Production-grade constrained decoders often implement the advanced error recovery -- such as setting hard limits on maximum string lengths, or backtracking when the logit probability fo the closing token drops too low
 
 ## What to implement
 

@@ -89,10 +89,10 @@ class ConstrainedDecoder:
             JSONState.PARAM_COLON: lambda p, c: self._get_tokens_for_string(
                 ":", p
             ),
-            # If not parameters left, banningthe comma from being generated
-            # and forcing to write } instead.
+            # If not parameters left, banning the comma from being generated
+            # and forcing to write } instead. If parameters are left, force comma.
             JSONState.PARAM_NEXT: lambda p, c: self._get_tokens_for_options(
-                ([","] if len(c['allowed_params']) > 0 else []) + ["}"], p
+                ([","] if len(c['allowed_params']) > 0 else ["}"]), p
             ),
             # Unpacking the content so value function will becoma hashable
             JSONState.PARAM_VALUE: lambda p, c: self._get_tokens_for_value(
@@ -250,10 +250,22 @@ class ConstrainedDecoder:
             'param_types': {},
             'current_param': None
         }
+        state_token_count = 0
 
         while state != JSONState.DONE:
             valid_ids = self.get_valid_tokens_for_state(state, current_prefix,
                                                         context)
+            # if model is stuck in this state -> counter gets too high ->
+            # overwrite valid_ids to only allow the '"' token
+            if state == JSONState.PARAM_VALUE and \
+                    context['param_types'].get(context['current_param']) \
+                    == "string":
+                if state_token_count > 20:
+                    print("\n[ERROR RECOVERY] String length exceeded limit."
+                          " Forcing closing quote.")
+                    valid_ids = [id for clean, id in self.clean_tokens
+                                 if clean.strip() == '"']
+
             if not valid_ids:
                 print(f"FATAL: No valid tokens for state{state.name} "
                       f"with prefix '{current_prefix}'. Breaking.")
@@ -310,7 +322,11 @@ class ConstrainedDecoder:
             state, current_prefix = self._transition_state(state,
                                                            current_prefix,
                                                            context)
-
+            state_token_count += 1
+            # if not visualize:
+            #     print(f"[GENERATE] state_token_count: {state_token_count}")
+            if old_state != state:
+                state_token_count = 0
             if visualize:
                 self._render_dashboard(user_question, state, old_state,
                                        fast_forwarded, valid_ids, token_str,
