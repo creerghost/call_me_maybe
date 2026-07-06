@@ -109,3 +109,5 @@ help:
 	@echo "  lint-strict   - Run strict code linting and type checking"
 	@echo "  help          - Show this help message"
 	@echo "==========================================================================="
+
+.PHONY: all install run run-visual run-custom run-custom-visual run-tests debug clean clean-cache lint lint-strict help
