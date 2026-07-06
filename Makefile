@@ -1,6 +1,8 @@
-# COMMENT if you are not in 42 prague clusters!
-# export HF_HOME = /sgoinfre/vlnikola/.cache/huggingface
-# export TORCH_HOME = /sgoinfre/vlnikola/.cache/torch
+# UNCOMMENT these lines if you are not in 42 prague clusters!
+# The size of HDD space in 42 clusters is very limited.
+LOGIN = vlnikola
+export HF_HOME = /sgoinfre/$(LOGIN)/.cache/huggingface
+export TORCH_HOME = /sgoinfre/$(LOGIN)/.cache/torch
 
 # ========================= CHANGE THESE ======================================
 FUNCTIONS_JSON = data/input/functions_definition.json
@@ -78,10 +80,20 @@ lint-strict:
 
 help:
 	@echo "============================================================================"
-	@echo "Welcome to the Makefile for the project!\n"
-	@echo "First, ensure you have uvicorn installed and available in your environment.\n"
+	@echo "Welcome to the Makefile for the project!"
+	@echo "This project has been created as a part of 42 curriculum by vlnikola."
+	@echo ""
+	@echo "First, ensure you have uvicorn installed and available in your environment."
+	@echo ""
 	@echo "Second, make sure to set paths to files in the data/input directory and the"
 	@echo "LLM module path/name in the Makefile variables."
+	@echo ""
+	@echo "Optionally, you can set the path to a custom model in the MODEL_PATH variable."
+	@echo ""
+	@echo "If you are not in 42 prague clusters, you should uncomment the following lines:"
+	@echo "  export HF_HOME = /sgoinfre/your_login/.cache/huggingface"
+	@echo "  export TORCH_HOME = /sgoinfre/your_login/.cache/torch"
+	@echo ""
 	@echo "----------------------------------------------------------------------------"
 	@echo "Available targets:"
 	@echo "  install       - Install dependencies using uvicorn"
