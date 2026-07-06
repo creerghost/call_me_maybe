@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ValidationError, model_validator, ConfigDict
-from typing import Any, Literal
+from typing import Any, Literal, Self
 import pytest
 
 
@@ -16,7 +16,7 @@ class FunctionDefinition(BaseModel):
     returns: FunctionParameter
 
     @model_validator(mode='after')
-    def check_empty_strings(self) -> 'FunctionDefinition':
+    def check_empty_strings(self) -> Self:
         if not self.name.strip():
             raise ValueError("Function name cannot be empty")
         if not self.description.strip():
@@ -32,7 +32,7 @@ class TestPrompt(BaseModel):
     prompt: str
 
     @model_validator(mode='after')
-    def check_empty_prompt(self) -> 'TestPrompt':
+    def check_empty_prompt(self) -> Self:
         if not self.prompt.strip():
             raise ValueError("Prompt cannot be empty")
         return self
