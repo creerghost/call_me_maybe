@@ -41,11 +41,11 @@ run-custom-visual: install
 	$(PYTHON) -m src $(ARGS) --model $(MODEL_PATH) --visual
 
 run-tests: install
-	@echo "Running tests in all Python files..."
-	@for file in src/*.py; do \
-		echo "Testing $$file..."; \
-		$(PYTHON) "$$file" || exit 1; \
-	done
+	@echo "Running tests..."
+	$(PYTHON) -m src.models
+	$(PYTHON) -m src.loader
+	$(PYTHON) -m src.prompt
+	$(PYTHON) -m src.output
 	@echo "All tests passed!"
 
 
