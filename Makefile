@@ -1,20 +1,18 @@
 # COMMENT if you are not in 42 prague clusters!
-export HF_HOME = /sgoinfre/vlnikola/.cache/huggingface
-export TORCH_HOME = /sgoinfre/vlnikola/.cache/torch
+# export HF_HOME = /sgoinfre/vlnikola/.cache/huggingface
+# export TORCH_HOME = /sgoinfre/vlnikola/.cache/torch
 
-# CHANGE THIS:
+# ========================= CHANGE THESE ======================================
 FUNCTIONS_JSON = data/input/functions_definition.json
 INPUT_JSON = data/input/function_calling_tests.json
 OUTPUT_JSON = data/output/function_calling_results.json
 LLM_PATH = llm_sdk
 LLM_NAME = Small_LLM_Model
-
-# TODO: add a target to run tests with pytest
-
-# TODO: add a target to run manually where we will ask
-# user required arguments and then run the script with those arguments
-
+# Model can be:
 MODEL_PATH = TinyLlama/TinyLlama-1.1B-Chat-v1.0
+# MODEL_PATH = microsoft/Phi-3-mini-4k-instruct  # (requires more and more RAM)
+# =============================================================================
+
 UV = uv
 PYTHON = $(UV) run python
 
@@ -41,6 +39,15 @@ run-custom: install
 
 run-custom-visual: install
 	$(PYTHON) -m src $(ARGS) --model $(MODEL_PATH) --visual
+
+run-tests: install
+	@echo "Running tests in all Python files..."
+	@for file in src/*.py; do \
+		echo "Testing $$file..."; \
+		$(PYTHON) "$$file" || exit 1; \
+	done
+	@echo "All tests passed!"
+
 
 debug:
 	$(PYTHON) -m pdb src/__main__.py
@@ -79,6 +86,10 @@ help:
 	@echo "Available targets:"
 	@echo "  install       - Install dependencies using uvicorn"
 	@echo "  run           - Run the main script with specified arguments"
+	@echo "  run-visual    - Run the main script with specified arguments and visual mode"
+	@echo "  run-custom    - Run the main script with custom model"
+	@echo "  run-custom-visual - Run the main script with custom model and visual mode"
+	@echo "  run-tests     - Run tests"
 	@echo "  debug         - Run the main script in debug mode using pdb"
 	@echo "  clean         - Remove temporary files and caches"
 	@echo "  clean-cache   - Remove only cache files"

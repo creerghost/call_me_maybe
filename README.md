@@ -1,3 +1,9 @@
+# TBD
+
+- [] ADD number and boolean support to the JSON schema.
+- [] ADD nested object support to the JSON schema.
+- [] DO readme for the project.
+
 # Resourses
 
 https://huggingface.co/docs/transformers/tokenizer_summary
