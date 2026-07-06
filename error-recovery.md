@@ -17,12 +17,6 @@ e.g., max length constraints
 
 **The solution**: Look at the logit score of the token before selecting it.
 
-### Backtracking
-
-**The problem**: The model makes a valid choice at Token A, but that choice leads to a dead end at Token B where `valid_tokens` becomes completely empty (0 valid).
-
-**The solution**: Rewind the generation by one step and pick the second best option for Token A.
-
 ### Repetition Penalties
 
 *SCRATCHED ENTIRELY* - not good approach for small LLMs
@@ -36,8 +30,6 @@ e.g., max length constraints
 1. Modify `ConstrainedDecoder` to track `state_token_count` and force-close long strings.
 
 2. Add a basic logit penalty for recently generated tokens.
-
-3. Implement a history stack to rewind generation when hitting a dead end.
 
 ## Results
 
