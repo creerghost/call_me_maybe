@@ -84,15 +84,15 @@
     }
   },
   {
-    "name": "fn_write_number",
-    "description": "Write a number that user requires. Doesn't do mathematical operations!",
+    "name": "fn_is_it_my_name",
+    "description": "Find out if its user's name.",
     "parameters": {
-      "number": {
-        "type": "number"
+      "name": {
+        "type": "string"
       }
     },
     "returns": {
-      "type": "string"
+      "type": "boolean"
     }
   }
 ]

@@ -4,6 +4,7 @@ from pathlib import Path
 from pydantic import ValidationError
 from .models import FunctionDefinition, TestPrompt
 from .catch import LoaderError
+import os
 
 
 class Loader():
@@ -26,7 +27,8 @@ class Loader():
             fcall (str): Path to the test prompts JSON file.
 
         Raises:
-            LoaderError: If files are missing, malformed, or fail Pydantic schema validation.
+            LoaderError: If files are missing, malformed, or fail Pydantic
+            schema validation.
         """
         try:
             with open(fdef, "r") as f:
@@ -60,11 +62,13 @@ class Loader():
 
 def test_loader_valid_files_existing() -> None:
     """Tests loading of valid JSON configuration files from disk."""
-    loader = Loader(
-        fdef_name="data/input/functions_definition.json",
-        fcall_name="data/input/function_calling_tests.json"
-    )
+    fdef = "data/input/functions_definition.json"
+    fcall = "data/input/function_calling_tests.json"
 
+    if not os.path.exists(fdef) or not os.path.exists(fcall):
+        pytest.skip("Default files not found, skipping hardcoded test.")
+
+    loader = Loader(fdef_name=fdef, fcall_name=fcall)
     assert len(loader.fn_defs) > 0
     assert len(loader.test_prompts) > 0
 

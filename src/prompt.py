@@ -12,14 +12,16 @@ class PromptConstructor():
         """Constructs a system prompt instructing the LLM to output JSON.
 
         Args:
-            functions (list[FunctionDefinition]): A list of available function schemas.
+            functions (list[FunctionDefinition]): A list of available function
+            schemas.
             user_prompt (str): The raw request from the user.
 
         Returns:
             str: The fully assembled prompt string.
 
         Raises:
-            PromptConstructionError: If the function list is empty or the user prompt is missing.
+            PromptConstructionError: If the function list is empty or the user
+            prompt is missing.
         """
         if not functions:
             raise PromptConstructionError("No valid function definition(s)")

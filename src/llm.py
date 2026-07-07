@@ -9,8 +9,10 @@ class LLM():
 
         Args:
             llm_path (str): The import path of the language model module.
-            llm_name (str): The class name of the language model to instantiate.
-            hf_model (str | None): Optional HuggingFace model identifier to load dynamically.
+            llm_name (str): The class name of the language model to
+            instantiate.
+            hf_model (str | None): Optional HuggingFace model identifier to
+            load dynamically.
         """
         self.llm_path = llm_path
         self.llm_name = llm_name
@@ -28,7 +30,8 @@ class LLM():
             self.model = model_class()
 
     def _load_vocab(self) -> None:
-        """Extracts the vocabulary mapping from the loaded model's tokenizer."""
+        """Extracts the vocabulary mapping from the loaded model's
+        tokenizer."""
         self.token2id = self.model._tokenizer.get_vocab()
         self.id2token = {v: k for k, v in self.token2id.items()}
 
@@ -47,12 +50,14 @@ class LLM():
             input_ids (list[int]): The context sequence of token IDs.
 
         Returns:
-            list[float] | Any: The raw logit scores for the next token prediction.
+            list[float] | Any: The raw logit scores for the next token
+            prediction.
         """
         return self.model.get_logits_from_input_ids(input_ids)
 
     def encode(self, text: str) -> list[int] | Any:
-        """Encodes text into token IDs, automatically applying chat templates if available.
+        """Encodes text into token IDs, automatically applying chat templates
+        if available.
 
         Args:
             text (str): The raw string prompt to encode.
@@ -70,7 +75,8 @@ class LLM():
                 res = res["input_ids"]
             if hasattr(res, "tolist"):
                 res = res.tolist()
-            if isinstance(res, list) and len(res) > 0 and isinstance(res[0], list):
+            if isinstance(res, list) and len(
+                    res) > 0 and isinstance(res[0], list):
                 res = res[0]
             return res
         return self.model.encode(text).squeeze().tolist()

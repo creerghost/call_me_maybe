@@ -36,9 +36,15 @@
     "prompt": "Distance from New York to Los Angeles?"
   },
   {
-    "prompt": "Say 67."
+    "prompt": "Какое расстояние от Москвы до Праги?"
   },
   {
-    "prompt": "Какое расстояние от Москвы до Праги?"
+    "prompt": "My name is Arthur. Is my name Arthur?"
+  },
+  {
+    "prompt": "My name is Lisa. Is my name Elisabeth?"
+  },
+  {
+    "prompt": "His name is Vlad. Is his name Alex?"
   }
 ]

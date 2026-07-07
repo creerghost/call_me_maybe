@@ -5,7 +5,7 @@ import pytest
 
 class FunctionParameter(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    type: Literal["string", "number"]
+    type: Literal["string", "number", "integer", "boolean", "bool"]
 
 
 class FunctionDefinition(BaseModel):
@@ -149,14 +149,16 @@ def test_function_definition_valid() -> None:
 
 
 def test_function_definition_invalid_empty() -> None:
-    """Tests that a ValidationError is raised for an empty function definition."""
+    """Tests that a ValidationError is raised for an empty function
+    definition."""
     with pytest.raises(ValidationError):
         invalid_args: Any = {}
         FunctionDefinition(**invalid_args)
 
 
 def test_function_definition_invalid_wrong_key() -> None:
-    """Tests that a ValidationError is raised when providing an incorrect key."""
+    """Tests that a ValidationError is raised when providing an incorrect
+    key."""
     param = FunctionParameter(type="number")
     with pytest.raises(ValidationError):
         invalid_args: Any = {
@@ -233,7 +235,8 @@ def test_function_call_result_valid() -> None:
 
 
 def test_function_call_result_invalid_missing() -> None:
-    """Tests that a ValidationError is raised when required arguments are missing."""
+    """Tests that a ValidationError is raised when required arguments are
+    missing."""
     with pytest.raises(ValidationError):
         invalid_args: Any = {"prompt": "Hello"}
         FunctionCallResult(**invalid_args)
@@ -255,7 +258,8 @@ def test_function_definition_invalid_parameters_wrong_key() -> None:
 
 
 def test_function_definition_invalid_parameters_wrong_value() -> None:
-    """Tests that a ValidationError is raised if a parameter value is invalid."""
+    """Tests that a ValidationError is raised if a parameter value is
+    invalid."""
     param = FunctionParameter(type="number")
 
     with pytest.raises(ValidationError):

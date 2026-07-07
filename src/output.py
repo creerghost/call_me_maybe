@@ -37,7 +37,6 @@ def test_save_json_success(tmp_path: Path) -> None:
     Args:
         tmp_path (Path): Pytest fixture providing a temporary directory.
     """
-
     out_file: Path = tmp_path / "answers.json"
 
     fake_answers = [
@@ -57,7 +56,8 @@ def test_save_json_success(tmp_path: Path) -> None:
 
 
 def test_save_json_empty_path() -> None:
-    """Tests that a ValueError is raised when providing an empty output path."""
+    """Tests that a ValueError is raised when providing an empty output
+    path."""
     fake_answers = [
         FunctionCallResult(
             prompt="test",

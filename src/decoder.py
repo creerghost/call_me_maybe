@@ -15,6 +15,7 @@ class JSONState(Enum):
     By looking at state, our code knows exactly which part of the JSON
         object it is currently forcing the LLM to write.
     """
+
     START = auto()         # Expecting '{'
     NAME_KEY = auto()      # Expecting '"name"'
     NAME_COLON = auto()    # Expecting ':'
@@ -108,31 +109,20 @@ class ConstrainedDecoder:
             ),
         }
 
-    def _transition_state(self, state: JSONState, current_prefix: str,
-                          context: dict[str, Any]) -> tuple[JSONState, str]:
-        """Evaluates if the state machine should advance to the next JSON state.
-
-        Args:
-            state (JSONState): The current state.
-            current_prefix (str): The text generated so far in the current state.
-            context (dict[str, Any]): Dynamic context holding schema rules.
-
-        Returns:
-            tuple[JSONState, str]: A tuple containing the new state (or old state if not done)
-                and the remaining prefix (usually cleared if transitioned).
-        """
-
     def get_valid_tokens_for_state(self, state: JSONState, current_prefix: str,
                                    context: dict[str, Any]) -> list[int]:
         """Calculates which tokens are legally allowed for the current state.
 
         Args:
             state (JSONState): The current state in the finite state machine.
-            current_prefix (str): The text generated so far in the current state.
-            context (dict[str, Any]): Dynamic state memory (allowed functions, parameters, types).
+            current_prefix (str): The text generated so far in the current
+            state.
+            context (dict[str, Any]): Dynamic state memory (allowed functions,
+            parameters, types).
 
         Returns:
-            list[int]: A list of valid token IDs that satisfy the schema constraints.
+            list[int]: A list of valid token IDs that satisfy the schema
+            constraints.
         """
         handler = self.state_handlers.get(state)
 
@@ -143,13 +133,16 @@ class ConstrainedDecoder:
     @lru_cache(maxsize=1024)
     def _get_tokens_for_string(self, expected: str,
                                curr_prefix: str) -> list[int]:
-        """Finds all tokens that can continue building the expected static string.
+        """Finds all tokens that can continue building the expected static
+        string.
 
         Uses prefix-matching to handle multi-character tokens correctly.
 
         Args:
-            expected (str): The exact string the model is forced to generate (e.g., '"name"').
-            curr_prefix (str): What the model has generated so far for this string.
+            expected (str): The exact string the model is forced to generate
+            (e.g., '"name"').
+            curr_prefix (str): What the model has generated so far for this
+            string.
 
         Returns:
             list[int]: A list of valid token IDs.
@@ -180,14 +173,17 @@ class ConstrainedDecoder:
 
     def _get_tokens_for_options(self, options: list[str],
                                 current_prefix: str) -> list[int]:
-        """Finds tokens that can continue building any string from a list of valid options.
+        """Finds tokens that can continue building any string from a list of
+        valid options.
 
         Args:
-            options (list[str]): The allowed exact strings (e.g., function names, param names).
+            options (list[str]): The allowed exact strings (e.g., function
+            names, param names).
             current_prefix (str): What the model has generated so far.
 
         Returns:
-            list[int]: A list of valid token IDs representing any of the options.
+            list[int]: A list of valid token IDs representing any of the
+            options.
         """
         valid_ids = set()  # pythonic way to remove duplicates
         current_prefix = current_prefix.strip()
@@ -204,7 +200,8 @@ class ConstrainedDecoder:
         """Finds tokens valid for generating a generic string parameter value.
 
         Returns:
-            list[int]: A list of token IDs that do not prematurely close the JSON structure.
+            list[int]: A list of token IDs that do not prematurely close the
+            JSON structure.
         """
         valid: list[int] = []
         for clean, id in self.clean_tokens:
@@ -222,10 +219,12 @@ class ConstrainedDecoder:
         Args:
             is_empty_prefix (bool): True if no number has been generated yet.
             has_digits (bool): True if at least one digit has been generated.
-            allowed_params_len (int): How many parameters remain (to allow commas).
+            allowed_params_len (int): How many parameters remain (to allow
+            commas).
 
         Returns:
-            list[int]: A list of token IDs containing only digits, decimals, commas, or braces.
+            list[int]: A list of token IDs containing only digits, decimals,
+            commas, or braces.
         """
         valid: list[int] = []
         for clean, id in self.clean_tokens:
@@ -249,11 +248,13 @@ class ConstrainedDecoder:
 
         Args:
             current_prefix (str): What the model has generated so far.
-            param_type (str | None): The Pydantic-defined type (e.g., 'string', 'number').
+            param_type (str | None): The Pydantic-defined type (e.g., 'string',
+            'number').
             allowed_params_len (int): How many parameters remain in the schema.
 
         Returns:
-            list[int]: A list of valid token IDs matching the requested type constraints.
+            list[int]: A list of valid token IDs matching the requested type
+            constraints.
         """
         if param_type == "string":
             if current_prefix.strip() == "":
@@ -267,7 +268,7 @@ class ConstrainedDecoder:
                 allowed_params_len
             )
 
-        elif param_type == "boolean":
+        elif param_type in ("boolean", "bool"):
             return self._get_tokens_for_options(
                 ["true", "false"], current_prefix
             )
@@ -277,13 +278,16 @@ class ConstrainedDecoder:
     def generate(self, prompt: str, user_question: str,
                  func_defs: list[FunctionDefinition],
                  visualize: bool = False) -> Any | str:
-        """Executes the autoregressive decoding loop constrained by a state machine.
+        """Executes the autoregressive decoding loop constrained by a state
+        machine.
 
         Args:
             prompt (str): The fully assembled system prompt.
             user_question (str): The raw user prompt (used for the visualizer).
-            func_defs (list[FunctionDefinition]): The available function schemas.
-            visualize (bool): If True, renders a live decoding dashboard to the CLI.
+            func_defs (list[FunctionDefinition]): The available function
+            schemas.
+            visualize (bool): If True, renders a live decoding dashboard to the
+            CLI.
 
         Returns:
             Any | str: The guaranteed syntactically valid JSON string.
@@ -314,9 +318,9 @@ class ConstrainedDecoder:
             # overwrite valid_ids to only allow the '"' token
             param_types = context.get('param_types', {})
             current_param = context.get('current_param')
-            if state == JSONState.PARAM_VALUE and \
-                    isinstance(param_types, dict) and \
-                    isinstance(current_param, str) and \
+            if state == JSONState.PARAM_VALUE and\
+                    isinstance(param_types, dict) and\
+                    isinstance(current_param, str) and\
                     param_types.get(current_param) == "string":
                 if state_token_count > 20:
                     print("\n[ERROR RECOVERY] String length exceeded limit."
@@ -370,7 +374,7 @@ class ConstrainedDecoder:
                         for q_id in quote_ids:
                             # basically, if u don't know what to talk
                             # just stfu!
-                            if logits[q_id] > float("-inf") and \
+                            if logits[q_id] > float("-inf") and\
                                     state_token_count > 3:
                                 logits[q_id] += 5.0
 
@@ -422,12 +426,11 @@ class ConstrainedDecoder:
     def _transition_state(self, state: JSONState,
                           current_prefix: str,
                           context: dict[str, Any]) -> tuple[JSONState, str]:
-        """
-        Once current_prefix exactly matches what we were expecting, we wipe
-            current_prefix clean and move to the last logical state.
+        """Once current_prefix exactly matches what we were expecting, we wipe
+        current_prefix clean and move to the last logical state.
 
         E.g., if we were in START and current_prefix is now "{", we transition
-            to NAME_KEY.
+        to NAME_KEY.
         """
         # print(f"[TRANSITION_STATE] state={state.name}, "
         #       f"prefix='{current_prefix}'")
@@ -515,7 +518,8 @@ class ConstrainedDecoder:
             state (JSONState): The current active state.
             old_state (JSONState): The previous active state.
             fast_forwarded (bool): Whether the LLM was bypassed this step.
-            valid_ids (list[int]): The count of tokens remaining after filtering.
+            valid_ids (list[int]): The count of tokens remaining after
+            filtering.
             token_str (str): The specific token generated this step.
             full_json_string (str): The entire JSON generated so far.
         """
