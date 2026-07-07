@@ -13,6 +13,11 @@ from .prompt import PromptConstructor
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Builds and returns the CLI argument parser.
+
+    Returns:
+        argparse.ArgumentParser: The configured argument parser.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--functions_definition", help="Path to functions "
                         "definition json file")
@@ -28,16 +33,44 @@ def build_parser() -> argparse.ArgumentParser:
 
 @catch
 def load_loader(functions_definition: str, input_path: str) -> Loader:
+    """Instantiates the Loader class to parse JSON schemas and prompts.
+
+    Args:
+        functions_definition (str): Path to the function definitions JSON file.
+        input_path (str): Path to the function calling test prompts JSON file.
+
+    Returns:
+        Loader: The initialized Loader object containing parsed data.
+    """
     return Loader(functions_definition, input_path)
 
 
 @catch
 def load_llm(llm_path: str, llm_name: str, hf_model: str | None) -> LLM:
+    """Instantiates the LLM wrapper class for the causal language model.
+
+    Args:
+        llm_path (str): Path to the provided mock LLM module (if used).
+        llm_name (str): Name of the mock LLM class.
+        hf_model (str | None): Path or identifier for a real HuggingFace model.
+
+    Returns:
+        LLM: The initialized Language Model wrapper.
+    """
     return LLM(llm_path, llm_name, hf_model)
 
 
 @catch
 def build_prompt(loader: Loader, test_prompt: TestPrompt) -> str:
+    """Constructs the full string prompt for the LLM.
+
+    Args:
+        loader (Loader): The loaded functions definitions.
+        test_prompt (TestPrompt): The user prompt string to inject.
+
+    Returns:
+        str: The fully formatted system and user prompt.
+    """
     return PromptConstructor.build_prompt(loader.fn_defs, test_prompt.prompt)
 
 
@@ -46,6 +79,17 @@ def generate_result(decoder: ConstrainedDecoder,
                     loader: Loader,
                     test_prompt: TestPrompt,
                     visualize: bool) -> FunctionCallResult:
+    """Executes the constrained decoding process and returns the parsed result.
+
+    Args:
+        decoder (ConstrainedDecoder): The state-machine enforced decoder.
+        loader (Loader): The JSON configuration loader.
+        test_prompt (TestPrompt): The current user prompt object to process.
+        visualize (bool): If True, renders the live CLI dashboard.
+
+    Returns:
+        FunctionCallResult: A parsed, validated Pydantic model of the output.
+    """
     prompt = build_prompt(loader, test_prompt)
     if not visualize:
         print(f"User prompt: {test_prompt.model_dump().values()}")
@@ -65,7 +109,12 @@ def generate_result(decoder: ConstrainedDecoder,
 
 @catch
 def run_pipeline(args: argparse.Namespace) -> None:
-    """Run the full load → prompt → decode → write pipeline."""
+    """Runs the full load, prompt, decode, and output writing pipeline.
+
+    Args:
+        args (argparse.Namespace): The parsed command line arguments containing
+            all file paths and execution flags.
+    """
     loader = load_loader(args.functions_definition, args.input)
 
     llm = load_llm(args.llm_path, args.llm_name, args.model)
@@ -83,6 +132,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
 @catch
 def main() -> None:
+    """Parses command line arguments and initiates the application pipeline."""
     parser = build_parser()
     args = parser.parse_args()
     run_pipeline(args)

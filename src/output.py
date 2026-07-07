@@ -8,6 +8,15 @@ class OutputWriter():
     @staticmethod
     def write_output(results: list[FunctionCallResult],
                      output_path: str) -> None:
+        """Saves a list of FunctionCallResults to a JSON file.
+
+        Args:
+            results (list[FunctionCallResult]): The parsed function call data.
+            output_path (str): The file path where the JSON should be written.
+
+        Raises:
+            ValueError: If the output path is empty or consists of whitespace.
+        """
         if not output_path.strip():
             raise ValueError("Output path is not defined")
 
@@ -23,6 +32,11 @@ class OutputWriter():
 # === TESTS ===
 
 def test_save_json_success(tmp_path: Path) -> None:
+    """Tests successfully writing valid function call results to a JSON file.
+
+    Args:
+        tmp_path (Path): Pytest fixture providing a temporary directory.
+    """
 
     out_file: Path = tmp_path / "answers.json"
 
@@ -43,6 +57,7 @@ def test_save_json_success(tmp_path: Path) -> None:
 
 
 def test_save_json_empty_path() -> None:
+    """Tests that a ValueError is raised when providing an empty output path."""
     fake_answers = [
         FunctionCallResult(
             prompt="test",

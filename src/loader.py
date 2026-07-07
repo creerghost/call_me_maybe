@@ -8,11 +8,26 @@ from .catch import LoaderError
 
 class Loader():
     def __init__(self, fdef_name: str, fcall_name: str) -> None:
+        """Initializes the Loader and parses the configuration files.
+
+        Args:
+            fdef_name (str): Path to the function definitions JSON file.
+            fcall_name (str): Path to the test prompts JSON file.
+        """
         self.fn_defs: list[FunctionDefinition] = []
         self.test_prompts: list[TestPrompt] = []
         self._load(fdef_name, fcall_name)
 
     def _load(self, fdef: str, fcall: str) -> None:
+        """Loads, parses, and validates the input JSON files.
+
+        Args:
+            fdef (str): Path to the function definitions JSON file.
+            fcall (str): Path to the test prompts JSON file.
+
+        Raises:
+            LoaderError: If files are missing, malformed, or fail Pydantic schema validation.
+        """
         try:
             with open(fdef, "r") as f:
                 json_defs = json.load(f)
@@ -44,6 +59,7 @@ class Loader():
 
 
 def test_loader_valid_files_existing() -> None:
+    """Tests loading of valid JSON configuration files from disk."""
     loader = Loader(
         fdef_name="data/input/functions_definition.json",
         fcall_name="data/input/function_calling_tests.json"
@@ -54,6 +70,11 @@ def test_loader_valid_files_existing() -> None:
 
 
 def test_loader_valid_files_created(tmp_path: Path) -> None:
+    """Tests loading dynamically created valid JSON configuration files.
+
+    Args:
+        tmp_path (Path): Pytest fixture providing a temporary directory.
+    """
     fdef: Path = tmp_path / "valid_def.json"
     valid_def_data = [{
         "name": "fn_test",
@@ -76,12 +97,18 @@ def test_loader_valid_files_created(tmp_path: Path) -> None:
 
 
 def test_loader_file_not_found() -> None:
+    """Tests that a LoaderError is raised when a file does not exist."""
     with pytest.raises(LoaderError):
         Loader("does_not_exist.json", "data/input/function_calling_tests.json")
 
 
 # tmp path is built-in pytest variable
 def test_loader_broken_json(tmp_path: Path) -> None:
+    """Tests that a LoaderError is raised when JSON syntax is invalid.
+
+    Args:
+        tmp_path (Path): Pytest fixture providing a temporary directory.
+    """
     broken_file: Path = tmp_path / "broken.json"
     broken_file.write_text("{ this is not a valid json object }")
 
@@ -90,6 +117,11 @@ def test_loader_broken_json(tmp_path: Path) -> None:
 
 
 def test_loader_broken_json_empty(tmp_path: Path) -> None:
+    """Tests that a LoaderError is raised when JSON objects are empty.
+
+    Args:
+        tmp_path (Path): Pytest fixture providing a temporary directory.
+    """
     broken_file: Path = tmp_path / "broken.json"
     broken_file.write_text("{}")
 

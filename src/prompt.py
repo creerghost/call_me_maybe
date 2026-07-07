@@ -9,6 +9,18 @@ class PromptConstructor():
     @staticmethod
     def build_prompt(functions: list[FunctionDefinition],
                      user_prompt: str) -> str:
+        """Constructs a system prompt instructing the LLM to output JSON.
+
+        Args:
+            functions (list[FunctionDefinition]): A list of available function schemas.
+            user_prompt (str): The raw request from the user.
+
+        Returns:
+            str: The fully assembled prompt string.
+
+        Raises:
+            PromptConstructionError: If the function list is empty or the user prompt is missing.
+        """
         if not functions:
             raise PromptConstructionError("No valid function definition(s)")
         if not user_prompt.strip():
@@ -42,6 +54,7 @@ class PromptConstructor():
 
 
 def test_build_prompt_valid() -> None:
+    """Tests successful construction of a prompt with valid inputs."""
     param = FunctionParameter(type="number")
     fd = FunctionDefinition(
         name="fn_add",
@@ -57,12 +70,14 @@ def test_build_prompt_valid() -> None:
 
 
 def test_build_prompt_empty_functions() -> None:
+    """Tests that an error is raised when the function list is empty."""
     prompt = "What is 5 + 5?"
     with pytest.raises(PromptConstructionError):
         PromptConstructor.build_prompt([], prompt)
 
 
 def test_build_prompt_empty_user_prompt() -> None:
+    """Tests that an error is raised when the user prompt is whitespace."""
     param = FunctionParameter(type="number")
     fd = FunctionDefinition(
         name="fn_add",
@@ -75,6 +90,7 @@ def test_build_prompt_empty_user_prompt() -> None:
 
 
 def test_build_prompt_wrong_functions() -> None:
+    """Tests that invalid Pydantic schemas fail before prompt construction."""
     param = FunctionParameter(type="number")
     prompt = "What is 5 + 5?"
     fd1 = FunctionDefinition(
