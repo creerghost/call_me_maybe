@@ -30,4 +30,17 @@ class LLM():
         return self.model.get_logits_from_input_ids(input_ids)
 
     def encode(self, text: str) -> list[int] | Any:
+        tokenizer = self.model._tokenizer
+        if hasattr(tokenizer, "chat_template") and tokenizer.chat_template:
+            messages = [{"role": "user", "content": text}]
+            res = tokenizer.apply_chat_template(
+                messages, add_generation_prompt=True
+            )
+            if hasattr(res, "get") and res.get("input_ids") is not None:
+                res = res["input_ids"]
+            if hasattr(res, "tolist"):
+                res = res.tolist()
+            if isinstance(res, list) and len(res) > 0 and isinstance(res[0], list):
+                res = res[0]
+            return res
         return self.model.encode(text).squeeze().tolist()

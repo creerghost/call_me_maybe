@@ -477,7 +477,3 @@ class ConstrainedDecoder:
         dashboard += f"{colored_json}\n"
 
         print(dashboard, end="", flush=True)
-
-
-if __name__ == "__main__":
-    pass
