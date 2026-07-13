@@ -70,8 +70,6 @@ def test_save_json_empty_path() -> None:
 
 
 if __name__ == "__main__":
-    from pathlib import Path
-
     path_obj = Path(__file__)
     print(f"\n=== TESTING {path_obj.stem}.py ===\n")
 
