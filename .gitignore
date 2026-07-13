@@ -3,3 +3,4 @@ __pycache__/
 data/output/
 .mypy_cache
 .pytest_cache
+conversations/

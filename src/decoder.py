@@ -1,6 +1,6 @@
 from typing import Any
 from .llm import LLM
-from .models import FunctionDefinition
+from .models import FunctionDefinition, SchemaNode, FunctionParameter
 from .fsm import JSONState, JSONStateMachine
 from .masker import TokenMasker
 # ONLY for performace optimization: working with tensors to not have big loops
@@ -18,18 +18,27 @@ class ConstrainedDecoder:
                  visualize: bool = False) -> Any | str:
         input_ids = self.llm.encode(prompt)
 
-        state = JSONState.START
+        state = JSONState.EXPECT_OBJECT_START
         generated_tokens: list[int] = []
         current_prefix = ""
         full_json_string = ""
         state_token_count = 0
 
+        # start by expecting the root JSON object which has two keys
+        root_node = SchemaNode(
+            type="object",
+            remaining_keys={'"name"', '"parameters"'},
+            properties={
+                '"name"': FunctionParameter(type="enum"),
+                '"parameters"': FunctionParameter(type="object", properties={})
+            }
+        )
+        # as we parse deeper into json we will push more nodes into stack
         context = {
+            'stack': [root_node],
             'func_defs': {f'"{f.name}"': f for f in func_defs},
             'allowed_funcs': [f'"{f.name}"' for f in func_defs],
-            'allowed_params': [],
-            'param_types': {},
-            'current_param': None
+            'current_key': None
         }
 
         while state != JSONState.DONE:

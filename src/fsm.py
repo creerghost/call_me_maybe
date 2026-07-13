@@ -1,95 +1,132 @@
 from enum import Enum, auto
 from typing import Any
+from .models import SchemaNode
 
 
 class JSONState(Enum):
-    START = auto()         # Expecting '{'
-    NAME_KEY = auto()      # Expecting '"name"'
-    NAME_COLON = auto()    # Expecting ':'
-    NAME_VALUE = auto()    # Expecting '"fn_add_numbers"'
-    COMMA_AFTER = auto()   # Expecting ','
-    PARAMS_KEY = auto()    # Expecting '"parameters"'
-    PARAMS_COLON = auto()  # Expecting ':'
-    PARAMS_START = auto()  # Expecting '{'
-    PARAM_KEY = auto()     # Expecting '"arg1"'
-    PARAM_COLON = auto()   # Expecting ':'
-    PARAM_VALUE = auto()   # Expecting value
-    PARAM_NEXT = auto()    # Expecting ',' or '}'
-    END = auto()           # Expecting '}'
-    DONE = auto()          # Finished generating
+    EXPECT_OBJECT_START = auto()
+    EXPECT_ARRAY_START = auto()
+    EXPECT_KEY = auto()
+    EXPECT_COLON = auto()
+    EXPECT_VALUE = auto()
+    EXPECT_COMMA_OR_END = auto()
+    DONE = auto()
 
 
 class JSONStateMachine:
     def transition_state(self, state: JSONState, current_prefix: str,
                          context: dict[str, Any]) -> tuple[JSONState, str]:
-        expected_strings = {
-            JSONState.START: "{",
-            JSONState.NAME_KEY: '"name"',
-            JSONState.NAME_COLON: ":",
-            JSONState.COMMA_AFTER: ",",
-            JSONState.PARAMS_KEY: '"parameters"',
-            JSONState.PARAMS_COLON: ":",
-            JSONState.PARAMS_START: "{",
-            JSONState.PARAM_COLON: ":",
-            JSONState.END: "}",
-        }
+        # always looking at the top of the stack
+        # tells us if we are currently inside an obj or an arr
+        # and what keys we are still waiting for
+        S = JSONState()
+        stack = context['stack']
+        current_node = stack[-1] if stack else None
 
-        # 1. Handle Static Strings
-        if state in expected_strings:
-            expected = expected_strings[state]
-            if current_prefix.strip() == expected:
-                next_states = {
-                    JSONState.START: JSONState.NAME_KEY,
-                    JSONState.NAME_KEY: JSONState.NAME_COLON,
-                    JSONState.NAME_COLON: JSONState.NAME_VALUE,
-                    JSONState.COMMA_AFTER: JSONState.PARAMS_KEY,
-                    JSONState.PARAMS_KEY: JSONState.PARAMS_COLON,
-                    JSONState.PARAMS_COLON: JSONState.PARAMS_START,
-                    JSONState.PARAMS_START: JSONState.PARAM_KEY,
-                    JSONState.PARAM_COLON: JSONState.PARAM_VALUE,
-                    JSONState.END: JSONState.DONE
-                }
-                return next_states[state], ""
+        prefix_strip = current_prefix.strip()
 
-        # 2. Handle Dynamic Options (like NAME_VALUE)
-        elif state == JSONState.NAME_VALUE:
-            if current_prefix.strip() in context['allowed_funcs']:
-                func_defs = context['func_defs'][current_prefix.strip()]
-                context['allowed_params'] = [
-                    f'"{p}"' for p in func_defs.parameters.keys()
-                ]
-                context['param_types'] = {
-                    f'"{p}"': v.type for p, v in func_defs.parameters.items()
-                }
-                return JSONState.COMMA_AFTER, ""
+        # expecting object/array? output { or [
+        if state == S.EXPECT_OBJECT_START:
+            if prefix_strip == "{":
+                return S.EXPECT_KEY, ""
 
-        elif state == JSONState.PARAM_KEY:
-            if current_prefix.strip() in context['allowed_params']:
-                context['current_param'] = current_prefix.strip()
-                context['allowed_params'].remove(context['current_param'])
-                return JSONState.PARAM_COLON, ""
+        elif state == S.EXPECT_ARRAY_START:
+            if prefix_strip == "[":
+                return S.EXPECT_VALUE, ""
 
-        elif state == JSONState.PARAM_VALUE:
-            param_type = context['param_types'].get(context['current_param'])
-            if param_type == "string":
-                prefix_stripped = current_prefix.strip()
-                if current_prefix.endswith('"') and len(prefix_stripped) > 1:
-                    return JSONState.PARAM_NEXT, ""
-            elif param_type in ("number", "integer"):
-                if "}" in current_prefix:
-                    return JSONState.END, ""
+        # checking if the token matches with remaining keys
+        # if it does, save it and remove from remaining keys
+        # llm can't generate it twice - genious
+        elif state == S.EXPECT_KEY:
+            # wait until the LLM generates a valid key from our remaining_keys
+            if current_node and \
+                    current_node.remaining_keys and \
+                    prefix_strip in current_node.remaining_keys:
+                context['current_key'] = prefix_strip
+                current_node.remaining_keys.remove(prefix_strip)
+                return S.EXPECT_COLON, ""
+
+        # when we see a ':', we look up the schema for the key
+        # we parsed
+        elif state == S.EXPECT_COLON:
+            if prefix_strip == ":":
+                val_schema = current_node.properties.get(
+                    context['current_key'])
+                val_type = val_schema.type if val_schema else "string"
+
+                # if the value is an object or array,
+                # push it to the stack immediately
+                if val_type == "object":
+                    new_node = SchemaNode(
+                        type="object",
+                        properties=val_schema.properties or {},
+                        remaining_keys=set(f'"{k}"'
+                                           for k in (
+                                            val_schema.properties
+                                            or {}).keys())
+                    )
+                    stack.append(new_node)
+                    return S.EXPECT_OBJECT_START, ""
+                elif val_type == "array":
+                    new_node = SchemaNode(
+                        type="array",
+                        items=val_schema.items
+                    )
+                    stack.append(new_node)
+                    return S.EXPECT_ARRAY_START, ""
+                else:
+                    # if its normal, transition to normal value
+                    return S.EXPECT_VALUE, ""
+
+        elif state == S.EXPECT_VALUE:
+            # figure out what type we are parsing based on the stack
+            if current_node.type == "object":
+                val_schema = current_node.properties.get(
+                    context['current_key'])
+            else:
+                val_schema = current_node.items
+
+            val_type = val_schema.type if val_schema else "string"
+
+            if val_type in ("string", "enum"):
+                if current_prefix.endswith('"') and len(prefix_strip) > 1:
+                    # if we just parsed the function name, load its parameters
+                    # into the root node
+                    if context.get('current_key') == '"name"' \
+                            and len(stack) == 1:
+                        func_def = context['func_defs'].get(prefix_strip)
+                        if func_def:
+                            params_node = current_node.properties[
+                                '"parameters"']
+                            params_node.properties = func_def.parameters
+                    return S.EXPECT_COMMA_OR_END, ""
+
+            elif val_type in ("number", "integer"):
+                if prefix_strip in {"}", "]"}:
+                    stack.pop()
+                    if not stack:
+                        return S.DONE, ""
+                    return S.EXPECT_COMMA_OR_END, ""
                 elif "," in current_prefix:
-                    return JSONState.PARAM_KEY, ""
-            elif param_type == "boolean":
-                stripped = current_prefix.strip()
-                if stripped in ("true", "false"):
-                    return JSONState.PARAM_NEXT, ""
+                    return S.EXPECT_KEY \
+                        if current_node.type == "object" \
+                        else S.EXPECT_VALUE, ""
 
-        elif state == JSONState.PARAM_NEXT:
-            if current_prefix.strip() == ",":
-                return JSONState.PARAM_KEY, ""
-            elif current_prefix.strip() == "}":
-                return JSONState.END, ""
+            elif val_type in ("boolean", "bool"):
+                if prefix_strip in ("true", "false"):
+                    return S.EXPECT_COMMA_OR_END, ""
 
-        # 3. If we are not done with this state, stay in the same state
+        elif state == S.EXPECT_COMMA_OR_END:
+            if prefix_strip == ",":
+                return S.EXPECT_KEY \
+                     if current_node.type == "object" \
+                     else S.EXPECT_VALUE, ""
+            elif prefix_strip in ("}", "]"):
+                stack.pop()
+                if not stack:
+                    return S.DONE, ""
+                return S.EXPECT_COMMA_OR_END, ""
+
+        # Stay in the same state and keep accumulating
+        # prefix if nothing matched
         return state, current_prefix

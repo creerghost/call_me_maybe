@@ -5,7 +5,10 @@ import pytest
 
 class FunctionParameter(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    type: Literal["string", "number", "integer", "boolean", "bool"]
+    type: Literal["string", "number", "integer", "boolean", "bool",
+                  "object", "array", "enum"]
+    properties: dict[str, "FunctionParameter"] | None = None
+    items: "FunctionParameter" | None = None
 
 
 class FunctionDefinition(BaseModel):
@@ -59,6 +62,15 @@ class FunctionCallResult(BaseModel):
     prompt: str
     name: str
     parameters: dict[str, Any]
+
+
+class SchemaNode(BaseModel):
+    type: Literal["object", "array", "string", "number",
+                  "integer", "boolean", "enum"]
+    options: list[str] | None = None  # for enums (like fn names)
+    properties: dict[str, FunctionParameter] | None = None
+    items: FunctionParameter | None = None
+    remaining_keys: set[str] | None = None  # tracks which keys we havent seen
 
     # === TESTS == FUNCTION PARAMETER ===
 
