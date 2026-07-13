@@ -2,6 +2,9 @@
 
 # Call Me Maybe: A Deep Dive into Constrained Decoding
 
+## WARNING
+Information is outdated. Will be changed later
+
 ## Table of Contents
 1. [Description](#1-description)
 2. [Introduction to AI & LLMs](#2-introduction-to-ai--llms)
