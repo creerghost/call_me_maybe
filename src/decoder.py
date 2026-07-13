@@ -101,10 +101,6 @@ class ConstrainedDecoder:
                             visualize: bool) -> tuple[int, str]:
         next_token_id = valid_ids[0]
         token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
-        if not visualize:
-            print(f"[GENERATE] state={state.name}, valid_tokens=1, "
-                  f"chosen='{token_str}' "
-                  f"(fast-forwarded - optimization)")
         return next_token_id, token_str
 
     def _generate_token_with_llm(self, input_ids: list[int],
@@ -148,11 +144,6 @@ class ConstrainedDecoder:
         next_token_id = int(torch.argmax(mask).item())
         token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
 
-        if not visualize:
-            print(f"[GENERATE] state={state.name}, "
-                  f"valid_tokens={len(valid_ids)}, "
-                  f"chosen='{token_str}'")
-
         return next_token_id, token_str
 
     def _print_status(self, visualize: bool, user_question: str,
@@ -163,13 +154,6 @@ class ConstrainedDecoder:
             self._render_dashboard(user_question, state, old_state,
                                    fast_forwarded, valid_ids, token_str,
                                    full_json_string)
-        else:
-            if old_state != state:
-                print(f"[GENERATE] transitioned to {state.name}\n")
-            else:
-                print(f"[GENERATE] Staying in the same state "
-                      f"{old_state.name}. "
-                      f"({old_state.name} == {state.name})")
 
     def _render_dashboard(self, user_question: str, state: JSONState,
                           old_state: JSONState, fast_forwarded: bool,

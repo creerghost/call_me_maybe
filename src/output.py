@@ -26,7 +26,6 @@ class OutputWriter():
 
         with output_path_obj.open("w", encoding="utf-8") as file_handle:
             json.dump(tmp, file_handle, indent=2, ensure_ascii=False)
-        print(f"[SAVE] Results have been saved to {output_path}.\n")
 
 
 # === TESTS ===

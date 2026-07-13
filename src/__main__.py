@@ -91,13 +91,8 @@ def generate_result(decoder: ConstrainedDecoder,
         FunctionCallResult: A parsed, validated Pydantic model of the output.
     """
     prompt = build_prompt(loader, test_prompt)
-    if not visualize:
-        print(f"User prompt: {test_prompt.model_dump().values()}")
-        print("\n" + "=" * 60)
     generated_text = decoder.generate(prompt, test_prompt.prompt,
                                       loader.fn_defs, visualize)
-    if not visualize:
-        print(f"Output: {generated_text}\n")
     loads = json.loads(generated_text)
 
     return FunctionCallResult(
@@ -122,9 +117,6 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     results = []
     for i, test_prompt in enumerate(loader.test_prompts):
-        if not args.visual:
-            print("=" * 60 + "\n")
-            print(f"{i + 1}. prompt")
         res = generate_result(decoder, loader, test_prompt, args.visual)
         results.append(res)
         OutputWriter.write_output(results, args.output)
