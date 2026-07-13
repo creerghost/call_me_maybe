@@ -1,5 +1,6 @@
 import importlib
 from typing import Any
+import numpy as np
 
 
 class LLM():
@@ -32,8 +33,16 @@ class LLM():
     def _load_vocab(self) -> None:
         """Extracts the vocabulary mapping from the loaded model's
         tokenizer."""
-        self.token2id = self.model._tokenizer.get_vocab()
-        self.id2token = {v: k for k, v in self.token2id.items()}
+        self.token2id: dict[str, int] = self.model._tokenizer.get_vocab()
+        self.id2token: dict[int, str] = {v: k
+                                         for k, v in self.token2id.items()}
+        # sorting by id to ensure stable and deterministic ordering
+        sorted_items = sorted(self.token2id.items(), key=lambda x: x[1])
+        # replace weird G with space to save time in the decoder loop
+        clean_strings = [s.replace("\u0120", " ") for s, _ in sorted_items]
+        ids = [i for _, i in sorted_items]
+        self.token_strings = np.array(clean_strings, dtype=object)
+        self.token_ids = np.array(ids, dtype=np.int32)
 
     def get_vocab_size(self) -> int:
         """Returns the total number of tokens in the model's vocabulary.

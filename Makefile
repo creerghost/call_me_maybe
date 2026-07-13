@@ -1,8 +1,8 @@
 # UNCOMMENT these lines if you are not in 42 prague clusters!
 # The size of HDD space in 42 clusters is very limited.
 LOGIN = vlnikola
-export HF_HOME = /sgoinfre/$(LOGIN)/.cache/huggingface
-export TORCH_HOME = /sgoinfre/$(LOGIN)/.cache/torch
+# export HF_HOME = /sgoinfre/$(LOGIN)/.cache/huggingface
+# export TORCH_HOME = /sgoinfre/$(LOGIN)/.cache/torch
 
 # ========================= CHANGE THESE ======================================
 FUNCTIONS_JSON = data/input/functions_definition.json

@@ -103,6 +103,7 @@ dependencies = [
     { name = "llm-sdk" },
     { name = "numpy" },
     { name = "pydantic" },
+    { name = "torch" },
 ]
 
 [package.dev-dependencies]
@@ -117,6 +118,7 @@ requires-dist = [
     { name = "llm-sdk", editable = "llm_sdk" },
     { name = "numpy", specifier = ">=2.0.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
+    { name = "torch", specifier = ">=2.0.0" },
 ]
 
 [package.metadata.requires-dev]

@@ -3,6 +3,9 @@ from typing import Any
 from .llm import LLM
 from .models import FunctionDefinition
 from functools import lru_cache
+import numpy as np
+# ONLY for performace optimization: working with tensors to not have big loops
+import torch
 
 
 class JSONState(Enum):
@@ -147,29 +150,28 @@ class ConstrainedDecoder:
         Returns:
             list[int]: A list of valid token IDs.
         """
-        valid_ids: list[int] = []
         # cleans LLM generated whitespace trails
         curr_prefix = curr_prefix.lstrip()
         # safe checks
-        if curr_prefix == expected:
+        if curr_prefix == expected or not expected.startswith(curr_prefix):
             return []
 
-        if not expected.startswith(curr_prefix):
-            return []
         # if expected="name" and prefix is "na", the remainder will be "me"
         remainder = expected[len(curr_prefix):]
 
-        for clean_str, token_id in self.clean_tokens:
-            # edge case for very first iterations: empty string
-            if not curr_prefix:
-                clean_str = clean_str.lstrip()
-
-            if not clean_str:  # if token is whitespace, we allow it
-                continue
-            # if the remainder is "me" and token is "m", we allow it
-            if remainder.startswith(clean_str):
-                valid_ids.append(token_id)
-        return valid_ids
+        token_strs = self.llm.token_strings.astype(str)
+        if not curr_prefix:
+            stripped_strs = np.char.lstrip(token_strs)
+            mask = np.array([
+                remainder.startswith(s) and s != ""
+                for s in stripped_strs
+                ], dtype=bool)
+        else:
+            mask = np.array([
+                remainder.startswith(s) and s != ""
+                for s in token_strs
+                ], dtype=bool)
+        return self.llm.token_ids[mask].tolist()
 
     def _get_tokens_for_options(self, options: list[str],
                                 current_prefix: str) -> list[int]:
@@ -197,49 +199,46 @@ class ConstrainedDecoder:
 
     @lru_cache(maxsize=1024)
     def _get_string_tokens(self) -> list[int]:
-        """Finds tokens valid for generating a generic string parameter value.
+        token_strs = self.llm.token_strings.astype(str)
 
-        Returns:
-            list[int]: A list of token IDs that do not prematurely close the
-            JSON structure.
-        """
-        valid: list[int] = []
-        for clean, id in self.clean_tokens:
-            if clean.strip() == '"':
-                valid.append(id)
-            elif '"' not in clean:
-                valid.append(id)
-        return valid
+        # Ban all tokens containing a quote to prevent spillover (like `", "`)
+        no_quote_mask = np.char.find(token_strs, '"') == -1
+        # Explicitly allow the token that is EXACTLY a quote so we can close
+        # the string
+        exact_quote_mask = np.char.strip(token_strs) == '"'
+
+        no_newline_mask = (np.char.find(token_strs, '\n') == -1) & \
+            (np.char.find(token_strs, 'Ċ') == -1)
+        nonempty_mask = token_strs != ""
+
+        # Combine the masks
+        valid_mask = (no_quote_mask | exact_quote_mask) & \
+            no_newline_mask & nonempty_mask
+        return self.llm.token_ids[valid_mask].tolist()
 
     @lru_cache(maxsize=1024)
     def _get_number_tokens(self, is_empty_prefix: bool, has_digits: bool,
                            allowed_params_len: int) -> list[int]:
-        """Finds tokens valid for generating a numeric parameter value.
-
-        Args:
-            is_empty_prefix (bool): True if no number has been generated yet.
-            has_digits (bool): True if at least one digit has been generated.
-            allowed_params_len (int): How many parameters remain (to allow
-            commas).
-
-        Returns:
-            list[int]: A list of token IDs containing only digits, decimals,
-            commas, or braces.
-        """
-        valid: list[int] = []
-        for clean, id in self.clean_tokens:
+        def is_valid_num(s: str) -> bool:
+            # a genious helper function!
             if is_empty_prefix:
-                clean = clean.lstrip()
-            if not clean:
-                continue
-            if not has_digits and any(c in ",}" for c in clean):
-                continue
-            if allowed_params_len == 0 and ',' in clean:
-                continue
-            if all(c in "0123456789.-,}"
-                   for c in clean) and ".." not in clean:
-                valid.append(id)
-        return valid
+                s = s.lstrip()
+            if not s:
+                return False
+            if not has_digits and any(c in ",}" for c in s):
+                return False
+            if allowed_params_len == 0 and ',' in s:
+                return False
+            return all(c in "0123456789.-,}" for c in s) and ".." not in s
+
+        # vectorize the validation function so it applies to the whole array
+        # genious!
+        vec_is_valid = np.vectorize(is_valid_num, otypes=[bool])
+
+        # this returns a boolean mask array
+        mask = vec_is_valid(self.llm.token_strings.astype(str))
+
+        return self.llm.token_ids[mask].tolist()
 
     def _get_tokens_for_value(self, current_prefix: str,
                               param_type: str | None,
@@ -349,14 +348,10 @@ class ConstrainedDecoder:
                 # if multiple valid tokens exist, we must ask the LLM
                 logits = self.llm.get_logits(input_ids + generated_tokens)
 
-                # C-styled array masking
-                # before I looped 150,000 times checking if i not in valid_set
-                # now I have 1 list of -inf floats and I need to iterate over
-                # 5 or 6 valid tokens
-                new_logits = [float("-inf")] * len(logits)
-                for vid in valid_ids:
-                    new_logits[vid] = logits[vid]
-                logits = new_logits
+                logits_t = torch.tensor(logits, dtype=torch.float32)
+                valid_ids_tensor = torch.tensor(valid_ids, dtype=torch.long)
+                mask = torch.full((len(logits_t),), float("-inf"))
+                mask[valid_ids_tensor] = logits_t[valid_ids_tensor]
 
                 # logit boosting: if we are writing a number, boost the
                 # probability of ',' and '}'
@@ -364,19 +359,28 @@ class ConstrainedDecoder:
                     param_type = context['param_types'].get(  # type: ignore
                         context['current_param'])
                     if param_type in ("number", "integer"):
-                        for id in self.stop_token_ids:
-                            if logits[id] > float("-inf"):
-                                logits[id] += 10.0
+                        # convert set into a list, then tensor, to index mask
+                        stop_ids = torch.tensor(list(self.stop_token_ids),
+                                                dtype=torch.long)
+                        # only boost if it was valid to begin with (> -inf)
+                        mask[stop_ids] = torch.where(
+                            mask[stop_ids] > float("-inf"),
+                            mask[stop_ids] + 10.0,
+                            mask[stop_ids]
+                        )
                     # boost quotes for strings
-                    elif param_type == "string":
+                    elif param_type == "string" and state_token_count > 3:
                         quote_ids = [id for clean, id in self.clean_tokens
                                      if clean.strip() == '"']
-                        for q_id in quote_ids:
-                            # basically, if u don't know what to talk
-                            # just stfu!
-                            if logits[q_id] > float("-inf") and\
-                                    state_token_count > 3:
-                                logits[q_id] += 5.0
+                        q_ids_tensor = torch.tensor(quote_ids,
+                                                    dtype=torch.long)
+                        mask[q_ids_tensor] = torch.where(
+                            mask[q_ids_tensor] > float("-inf"),
+                            mask[q_ids_tensor] + 5.0,
+                            mask[q_ids_tensor]
+                        )
+                # take the best result using argmax
+                next_token_id = int(torch.argmax(mask).item())
 
                 # # Error recovery: repetition penalty
                 # # looping over last 15 tokens generated
@@ -385,8 +389,6 @@ class ConstrainedDecoder:
                 #     if logits[prev_id] > float("-inf"):
                 #         logits[prev_id] -= 0.5
 
-                # take the token with maximum probability
-                next_token_id = logits.index(max(logits))
                 token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
                 if not visualize:
                     print(f"[GENERATE] state={state.name}, "
