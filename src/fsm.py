@@ -52,6 +52,9 @@ class JSONStateMachine:
             if prefix_strip == ":":
                 val_schema = current_node.properties.get(
                     context['current_key'])
+                if val_schema is None:
+                    val_schema = current_node.properties.get(
+                        context['current_key'].strip('"'))
                 val_type = val_schema.type if val_schema else "string"
 
                 # if the value is an object or array,
@@ -96,7 +99,7 @@ class JSONStateMachine:
                     return S.EXPECT_COMMA_OR_END, ""
 
             elif val_type in ("number", "integer"):
-                if prefix_strip in {"}", "]"}:
+                if "}" in current_prefix or "]" in current_prefix:
                     stack.pop()
                     if not stack:
                         return S.DONE, ""

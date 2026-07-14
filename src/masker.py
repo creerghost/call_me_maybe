@@ -15,11 +15,12 @@ class TokenMasker:
         # precompute token strings and stop tokens to avoid looping
         self.token_strs = self.llm.token_strings.astype(str)
         self.stripped_strs = np.char.lstrip(self.token_strs)
-        
+
         self.stop_token_ids = {id for clean, id in self.clean_tokens
                                if clean.strip() in (",", "}", "]")}
-                               
-        self.quote_ids = [id for clean, id in self.clean_tokens if clean.strip() == '"']
+
+        self.quote_ids = [id for clean, id in self.clean_tokens
+                          if clean.strip() == '"']
 
         S = JSONState
         self.state_handlers = {
@@ -36,10 +37,7 @@ class TokenMasker:
             ),
 
             S.EXPECT_COMMA_OR_END: lambda p,
-            c: self._get_tokens_for_options(
-                ([",", "}"] if c['stack'] and c['stack'][-1].type == "object"
-                    else [",", "]"]), p
-            ),
+            c: self._get_tokens_for_comma_or_end(p, c),
 
             S.EXPECT_VALUE: lambda p, c: self._get_tokens_for_value(p, c),
         }
@@ -83,6 +81,26 @@ class TokenMasker:
                 valid_ids.update(tokens)
 
         return list(valid_ids)
+
+    def _get_tokens_for_comma_or_end(self, current_prefix: str,
+                                     context: dict[str, Any]) -> list[int]:
+        stack = context['stack']
+        if not stack:
+            return []
+        
+        current_node = stack[-1]
+        options = []
+        if current_node.type == "object":
+            options.append("}")
+            if current_node.remaining_keys:
+                options.append(",")
+        else:
+            options.append("]")
+            # For array, we could check if items are bounded, 
+            # but usually they are open-ended list of items.
+            options.append(",")
+            
+        return self._get_tokens_for_options(options, current_prefix)
 
     @lru_cache(maxsize=1024)
     def _get_string_tokens(self) -> list[int]:
@@ -129,9 +147,13 @@ class TokenMasker:
             return self._get_string_tokens()
 
         elif val_type == "enum":
-            options = context['allowed_funcs'] \
-                if context.get('current_key') == '"name"' else []
-            return self._get_tokens_for_options(options, current_prefix)
+            if context.get('current_key') == '"name"':
+                options = context['allowed_funcs']
+                return self._get_tokens_for_options(options, current_prefix)
+            else:
+                if current_prefix.strip() == "":
+                    return self._get_tokens_for_string('"', current_prefix)
+                return self._get_string_tokens()
 
         elif val_type in ("number", "integer"):
             # Only allow a comma if we have remaining keys to parse!

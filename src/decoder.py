@@ -12,8 +12,10 @@ class ConstrainedDecoder:
         self.llm = llm
         self.fsm = JSONStateMachine()
         self.masker = TokenMasker(llm)
-        self.stop_token_ids_tensor = torch.tensor(list(self.masker.stop_token_ids), dtype=torch.long)
-        self.quote_ids_tensor = torch.tensor(self.masker.quote_ids, dtype=torch.long)
+        self.stop_token_ids_tensor = torch.tensor(
+            list(self.masker.stop_token_ids), dtype=torch.long)
+        self.quote_ids_tensor = torch.tensor(
+            self.masker.quote_ids, dtype=torch.long)
 
     def generate(self, prompt: str, user_question: str,
                  func_defs: list[FunctionDefinition],
@@ -53,8 +55,6 @@ class ConstrainedDecoder:
             )
 
             if not valid_ids:
-                raise Exception(f"FATAL: No valid tokens for state{state.name}"
-                                f" with prefix '{current_prefix}'. Breaking.")
                 break
 
             if len(valid_ids) == 1:
@@ -100,8 +100,8 @@ class ConstrainedDecoder:
             val_type = current_node.get_child_type(context.get('current_key'))
 
             if val_type == "string" and state_token_count > 20:
-                print("\n[ERROR RECOVERY] String length exceeded limit."
-                      " Forcing closing quote.")
+                # print("\n[ERROR RECOVERY] String length exceeded limit."
+                #       " Forcing closing quote.")
                 return self.masker.quote_ids
         return valid_ids
 

@@ -76,7 +76,14 @@ class SchemaNode(BaseModel):
     def get_child_type(self, key: str | None = None) -> str:
         """Returns the type of the current value being parsed."""
         if self.type == "object":
-            val_schema = self.properties.get(key) if self.properties and key else None
+            val_schema = None
+            if self.properties and key:
+                val_schema = self.properties.get(key)
+                # nested schema properties use keys without quotes and
+                # val_schema becomes None. -> decoder treats everything as
+                # a string.
+                if val_schema is None:
+                    val_schema = self.properties.get(key.strip('"'))
         else:
             val_schema = self.items
         return val_schema.type if val_schema else "string"

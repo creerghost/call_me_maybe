@@ -42,9 +42,12 @@
     "prompt": "My name is Arthur. Is my name Arthur?"
   },
   {
-    "prompt": "My name is Lisa. Is my name Elisabeth?"
+    "prompt": "Sort the following numbers: 5, 2, 9, 1, 7"
   },
   {
-    "prompt": "His name is Vlad. Is his name Alex?"
+    "prompt": "Update the user John Doe, who is 30 years old."
+  },
+  {
+    "prompt": "Get the status for the pending operation."
   }
 ]

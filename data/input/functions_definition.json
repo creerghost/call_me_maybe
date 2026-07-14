@@ -94,5 +94,55 @@
     "returns": {
       "type": "boolean"
     }
+  },
+  {
+    "name": "fn_sort_numbers",
+    "description": "Sort an array of numbers.",
+    "parameters": {
+      "arr": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      }
+    },
+    "returns": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    }
+  },
+  {
+    "name": "fn_update_user",
+    "description": "Update user information.",
+    "parameters": {
+      "user": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "age": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "returns": {
+      "type": "boolean"
+    }
+  },
+  {
+    "name": "fn_get_status",
+    "description": "Get the status of an operation.",
+    "parameters": {
+      "status": {
+        "type": "enum"
+      }
+    },
+    "returns": {
+      "type": "string"
+    }
   }
 ]
