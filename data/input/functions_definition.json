@@ -144,5 +144,36 @@
     "returns": {
       "type": "string"
     }
+  },
+  {
+    "name": "fn_deeply_nested_stress_test",
+    "description": "A stress test for deeply nested structures.",
+    "parameters": {
+      "level1": {
+        "type": "object",
+        "properties": {
+          "level2_arr": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "level4_arr": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "level4_str": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "returns": {
+      "type": "boolean"
+    }
   }
 ]

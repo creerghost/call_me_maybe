@@ -49,5 +49,8 @@
   },
   {
     "prompt": "Get the status for the pending operation."
+  },
+  {
+    "prompt": "Create a deeply nested structure with level1 having level2_arr with an object containing level4_arr with numbers 1, 2, 3 and level4_str 'hello'."
   }
 ]

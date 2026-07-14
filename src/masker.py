@@ -91,8 +91,9 @@ class TokenMasker:
         current_node = stack[-1]
         options = []
         if current_node.type == "object":
-            options.append("}")
-            if current_node.remaining_keys:
+            if not current_node.remaining_keys:
+                options.append("}")
+            else:
                 options.append(",")
         else:
             options.append("]")
@@ -156,12 +157,13 @@ class TokenMasker:
                 return self._get_string_tokens()
 
         elif val_type in ("number", "integer"):
-            # Only allow a comma if we have remaining keys to parse!
-            if current_node.type == "object" and not \
-                    current_node.remaining_keys:
-                allowed_chars = "}"
+            if current_node.type == "object":
+                if not current_node.remaining_keys:
+                    allowed_chars = "}"
+                else:
+                    allowed_chars = ","
             else:
-                allowed_chars = ",}" if current_node.type == "object" else ",]"
+                allowed_chars = ",]"
 
             return self._get_number_tokens(
                 current_prefix.strip() == "",

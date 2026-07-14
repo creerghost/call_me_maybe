@@ -14,6 +14,31 @@ class JSONState(Enum):
 
 
 class JSONStateMachine:
+    def _transition_to_value(self, val_schema: Any, stack: list[SchemaNode]) -> tuple[JSONState, str]:
+        S = JSONState
+        val_type = val_schema.type if val_schema else "string"
+
+        if val_type == "object":
+            new_node = SchemaNode(
+                type="object",
+                properties=val_schema.properties or {},
+                remaining_keys=set(f'"{k}"'
+                                   for k in (
+                                    val_schema.properties
+                                    or {}).keys())
+            )
+            stack.append(new_node)
+            return S.EXPECT_OBJECT_START, ""
+        elif val_type == "array":
+            new_node = SchemaNode(
+                type="array",
+                items=val_schema.items
+            )
+            stack.append(new_node)
+            return S.EXPECT_ARRAY_START, ""
+        else:
+            return S.EXPECT_VALUE, ""
+
     def transition_state(self, state: JSONState, current_prefix: str,
                          context: dict[str, Any]) -> tuple[JSONState, str]:
         # always looking at the top of the stack
@@ -32,7 +57,7 @@ class JSONStateMachine:
 
         elif state == S.EXPECT_ARRAY_START:
             if prefix_strip == "[":
-                return S.EXPECT_VALUE, ""
+                return self._transition_to_value(current_node.items if current_node else None, stack)
 
         # checking if the token matches with remaining keys
         # if it does, save it and remove from remaining keys
@@ -55,31 +80,8 @@ class JSONStateMachine:
                 if val_schema is None:
                     val_schema = current_node.properties.get(
                         context['current_key'].strip('"'))
-                val_type = val_schema.type if val_schema else "string"
-
-                # if the value is an object or array,
-                # push it to the stack immediately
-                if val_type == "object":
-                    new_node = SchemaNode(
-                        type="object",
-                        properties=val_schema.properties or {},
-                        remaining_keys=set(f'"{k}"'
-                                           for k in (
-                                            val_schema.properties
-                                            or {}).keys())
-                    )
-                    stack.append(new_node)
-                    return S.EXPECT_OBJECT_START, ""
-                elif val_type == "array":
-                    new_node = SchemaNode(
-                        type="array",
-                        items=val_schema.items
-                    )
-                    stack.append(new_node)
-                    return S.EXPECT_ARRAY_START, ""
-                else:
-                    # if its normal, transition to normal value
-                    return S.EXPECT_VALUE, ""
+                
+                return self._transition_to_value(val_schema, stack)
 
         elif state == S.EXPECT_VALUE:
             # figure out what type we are parsing based on the stack
@@ -115,9 +117,10 @@ class JSONStateMachine:
 
         elif state == S.EXPECT_COMMA_OR_END:
             if prefix_strip == ",":
-                return S.EXPECT_KEY \
-                     if current_node.type == "object" \
-                     else S.EXPECT_VALUE, ""
+                if current_node.type == "object":
+                    return S.EXPECT_KEY, ""
+                else:
+                    return self._transition_to_value(current_node.items, stack)
             elif prefix_strip in ("}", "]"):
                 stack.pop()
                 if not stack:
