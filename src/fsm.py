@@ -19,7 +19,7 @@ class JSONStateMachine:
         # always looking at the top of the stack
         # tells us if we are currently inside an obj or an arr
         # and what keys we are still waiting for
-        S = JSONState()
+        S = JSONState
         stack = context['stack']
         current_node = stack[-1] if stack else None
 
@@ -80,13 +80,7 @@ class JSONStateMachine:
 
         elif state == S.EXPECT_VALUE:
             # figure out what type we are parsing based on the stack
-            if current_node.type == "object":
-                val_schema = current_node.properties.get(
-                    context['current_key'])
-            else:
-                val_schema = current_node.items
-
-            val_type = val_schema.type if val_schema else "string"
+            val_type = current_node.get_child_type(context.get('current_key'))
 
             if val_type in ("string", "enum"):
                 if current_prefix.endswith('"') and len(prefix_strip) > 1:

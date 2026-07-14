@@ -12,6 +12,8 @@ class ConstrainedDecoder:
         self.llm = llm
         self.fsm = JSONStateMachine()
         self.masker = TokenMasker(llm)
+        self.stop_token_ids_tensor = torch.tensor(list(self.masker.stop_token_ids), dtype=torch.long)
+        self.quote_ids_tensor = torch.tensor(self.masker.quote_ids, dtype=torch.long)
 
     def generate(self, prompt: str, user_question: str,
                  func_defs: list[FunctionDefinition],
@@ -51,8 +53,8 @@ class ConstrainedDecoder:
             )
 
             if not valid_ids:
-                print(f"FATAL: No valid tokens for state{state.name} "
-                      f"with prefix '{current_prefix}'. Breaking.")
+                raise Exception(f"FATAL: No valid tokens for state{state.name}"
+                                f" with prefix '{current_prefix}'. Breaking.")
                 break
 
             if len(valid_ids) == 1:
@@ -93,17 +95,14 @@ class ConstrainedDecoder:
     def _handle_error_recovery(self, state: JSONState, context: dict[str, Any],
                                state_token_count: int,
                                valid_ids: list[int]) -> list[int]:
-        param_types = context.get('param_types', {})
-        current_param = context.get('current_param')
-        if state == JSONState.PARAM_VALUE and \
-                isinstance(param_types, dict) and \
-                isinstance(current_param, str) and \
-                param_types.get(current_param) == "string":
-            if state_token_count > 20:
+        if state == JSONState.EXPECT_VALUE:
+            current_node = context['stack'][-1]
+            val_type = current_node.get_child_type(context.get('current_key'))
+
+            if val_type == "string" and state_token_count > 20:
                 print("\n[ERROR RECOVERY] String length exceeded limit."
                       " Forcing closing quote.")
-                return [id for clean, id in self.masker.clean_tokens
-                        if clean.strip() == '"']
+                return self.masker.quote_ids
         return valid_ids
 
     def _fast_forward_token(self, valid_ids: list[int], state: JSONState,
@@ -125,29 +124,21 @@ class ConstrainedDecoder:
         mask = torch.full((len(logits_t),), float("-inf"))
         mask[valid_ids_tensor] = logits_t[valid_ids_tensor]
 
-        if state == JSONState.PARAM_VALUE:
-            param_type = context['param_types'].get(context['current_param'])
-            if param_type in ("number", "integer"):
-                stop_ids = torch.tensor(
-                    list(self.masker.stop_token_ids),
-                    dtype=torch.long
+        if state == JSONState.EXPECT_VALUE:
+            current_node = context['stack'][-1]
+            val_type = current_node.get_child_type(context.get('current_key'))
+
+            if val_type in ("number", "integer"):
+                mask[self.stop_token_ids_tensor] = torch.where(
+                    mask[self.stop_token_ids_tensor] > float("-inf"),
+                    mask[self.stop_token_ids_tensor] + 10.0,
+                    mask[self.stop_token_ids_tensor]
                 )
-                mask[stop_ids] = torch.where(
-                    mask[stop_ids] > float("-inf"),
-                    mask[stop_ids] + 10.0,
-                    mask[stop_ids]
-                )
-            elif param_type == "string" and state_token_count > 3:
-                quote_ids = [id for clean, id in
-                             self.masker.clean_tokens
-                             if clean.strip() == '"']
-                q_ids_tensor = torch.tensor(
-                    quote_ids, dtype=torch.long
-                )
-                mask[q_ids_tensor] = torch.where(
-                    mask[q_ids_tensor] > float("-inf"),
-                    mask[q_ids_tensor] + 5.0,
-                    mask[q_ids_tensor]
+            elif val_type == "string" and state_token_count > 3:
+                mask[self.quote_ids_tensor] = torch.where(
+                    mask[self.quote_ids_tensor] > float("-inf"),
+                    mask[self.quote_ids_tensor] + 5.0,
+                    mask[self.quote_ids_tensor]
                 )
 
         next_token_id = int(torch.argmax(mask).item())

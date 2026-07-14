@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pydantic import BaseModel, ValidationError, model_validator, ConfigDict
 from typing import Any, Literal, Self
 import pytest
@@ -7,8 +8,8 @@ class FunctionParameter(BaseModel):
     model_config = ConfigDict(extra='forbid')
     type: Literal["string", "number", "integer", "boolean", "bool",
                   "object", "array", "enum"]
-    properties: dict[str, "FunctionParameter"] | None = None
-    items: "FunctionParameter" | None = None
+    properties: dict[str, FunctionParameter] | None = None
+    items: FunctionParameter | None = None
 
 
 class FunctionDefinition(BaseModel):
@@ -72,6 +73,14 @@ class SchemaNode(BaseModel):
     items: FunctionParameter | None = None
     remaining_keys: set[str] | None = None  # tracks which keys we havent seen
 
+    def get_child_type(self, key: str | None = None) -> str:
+        """Returns the type of the current value being parsed."""
+        if self.type == "object":
+            val_schema = self.properties.get(key) if self.properties and key else None
+        else:
+            val_schema = self.items
+        return val_schema.type if val_schema else "string"
+
     # === TESTS == FUNCTION PARAMETER ===
 
 
@@ -84,7 +93,7 @@ def test_function_parameter_valid() -> None:
 def test_function_parameter_invalid_wrong_text() -> None:
     """Tests that a ValidationError is raised for an invalid string type."""
     with pytest.raises(ValidationError):
-        invalid_type: Any = "boolean"
+        invalid_type: Any = "random_string"
         FunctionParameter(type=invalid_type)
 
 
