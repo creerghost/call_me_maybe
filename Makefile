@@ -40,9 +40,9 @@ install:
 	@printf "$(CYAN)Syncing dependencies with uv...$(RESET)\n"
 	$(UV) sync
 
-run: install
+run: install test
 	@printf "$(MAGENTA)Running evaluator test suite...$(RESET)\n"
-	$(UV) run python -m pytest tests/ -v --no-header --tb=short --disable-warnings
+	$(PYTHON) -m src $(ARGS)
 
 run-full: install
 	@printf "$(MAGENTA)Running full suite (visual + tokenizer)...$(RESET)\n"
