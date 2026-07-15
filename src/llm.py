@@ -27,7 +27,6 @@ class LLM:
         self.hf_model = hf_model
         self.use_tokenizer = tokenizer
         self._init_llm()
-        self._load_vocab()
         if self.use_tokenizer:
             from .tokenizer import BPETokenizer
 
@@ -35,6 +34,7 @@ class LLM:
                 self.model.get_path_to_vocab_file(),
                 self.model.get_path_to_merges_file(),
             )
+        self._load_vocab()
 
     def _init_llm(self) -> None:
         """Dynamically imports and instantiates the language model class."""
@@ -48,10 +48,16 @@ class LLM:
     def _load_vocab(self) -> None:
         """Extracts the vocabulary mapping from the loaded model's
         tokenizer."""
-        self.token2id: dict[str, int] = self.model._tokenizer.get_vocab()
-        self.id2token: dict[int, str] = {
-            v: k for k, v in self.token2id.items()
-        }
+        self.token2id: dict[str, int]
+        self.id2token: dict[int, str]
+        if self.use_tokenizer:
+            self.token2id = self.custom_tokenizer.vocab
+            self.id2token = self.custom_tokenizer.vocab_rev
+        else:
+            self.token2id = self.model._tokenizer.get_vocab()
+            self.id2token = {
+                v: k for k, v in self.token2id.items()
+            }
         # sorting by id to ensure stable and deterministic ordering
         sorted_items = sorted(self.token2id.items(), key=lambda x: x[1])
         # replace weird G with space to save time in the decoder loop
@@ -121,3 +127,16 @@ class LLM:
                 res = res[0]
             return res
         return self.model.encode(text).squeeze().tolist()
+
+    def decode(self, tokens: list[int]) -> str:
+        """Decodes a list of token IDs into a text string.
+
+        Args:
+            tokens (list[int]): The sequence of token IDs to decode.
+
+        Returns:
+            str: The decoded text string.
+        """
+        if self.use_tokenizer:
+            return self.custom_tokenizer.decode(tokens)
+        return str(self.model.decode(tokens))

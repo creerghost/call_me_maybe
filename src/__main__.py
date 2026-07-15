@@ -70,7 +70,7 @@ def generate_result(
             visualizer.render(event)
         generated_tokens.append(event.next_token_id)
 
-    generated_text = decoder.llm.model.decode(generated_tokens)
+    generated_text = decoder.llm.decode(generated_tokens)
     loads = json.loads(generated_text)
 
     return FunctionCallResult(
