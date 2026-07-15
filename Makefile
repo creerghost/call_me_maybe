@@ -50,7 +50,7 @@ run-full: install
 
 run-interactive: install
 	@printf "$(MAGENTA)Running interactive prompt mode...$(RESET)\n"
-	$(PYTHON) -m src $(ARGS) --interactive
+	$(PYTHON) -m src $(ARGS) --visual --interactive
 
 run-visual: install
 	@printf "$(MAGENTA)Running with visual mode...$(RESET)\n"
