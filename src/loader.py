@@ -1,3 +1,5 @@
+"""Module for loading JSON configurations."""
+
 import json
 from pydantic import ValidationError
 from .models import FunctionDefinition, TestPrompt
@@ -5,6 +7,7 @@ from .catch import LoaderError
 
 
 class Loader:
+    """Responsible for loading and validating input JSON files."""
     def __init__(self, fdef_name: str, fcall_name: str) -> None:
         """Initializes the Loader and parses the configuration files.
 

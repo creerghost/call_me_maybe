@@ -1,3 +1,5 @@
+"""Module for dynamically masking LLM vocabularies."""
+
 from typing import Any, cast
 from functools import lru_cache
 import numpy as np
@@ -6,7 +8,9 @@ from .llm import LLM
 
 
 class TokenMasker:
+    """Filters valid tokens based on JSON state and schemas."""
     def __init__(self, llm: LLM) -> None:
+        """Initializes the instance."""
         self.llm = llm
 
         self.clean_tokens = [
@@ -48,6 +52,7 @@ class TokenMasker:
     def get_valid_tokens_for_state(
         self, state: JSONState, current_prefix: str, context: dict[str, Any]
     ) -> list[int]:
+        """Executes get valid tokens for state."""
         handler = self.state_handlers.get(state)
         if handler:
             return handler(current_prefix, context)
@@ -57,6 +62,7 @@ class TokenMasker:
     def _get_tokens_for_string(
         self, expected: str, curr_prefix: str
     ) -> list[int]:
+        """Executes get tokens for string."""
         curr_prefix = curr_prefix.lstrip()
         if curr_prefix == expected or not expected.startswith(curr_prefix):
             return []
@@ -81,6 +87,7 @@ class TokenMasker:
     def _get_tokens_for_options(
         self, options: list[str], current_prefix: str
     ) -> list[int]:
+        """Executes get tokens for options."""
         valid_ids = set()
         current_prefix = current_prefix.strip()
 
@@ -94,6 +101,7 @@ class TokenMasker:
     def _get_tokens_for_comma_or_end(
         self, current_prefix: str, context: dict[str, Any]
     ) -> list[int]:
+        """Executes get tokens for comma or end."""
         stack = context["stack"]
         if not stack:
             return []
@@ -116,6 +124,7 @@ class TokenMasker:
     @lru_cache(maxsize=1024)
     def _get_string_tokens(self) -> list[int]:
         # Ban tokens containing quote to prevent FSM spillover
+        """Executes get string tokens."""
         no_quote_mask = np.char.find(self.token_strs, '"') == -1
         # Explicitly allow exact quote to close the string
         exact_quote_mask = np.char.strip(self.token_strs) == '"'
@@ -136,7 +145,9 @@ class TokenMasker:
     def _get_number_tokens(
         self, is_empty_prefix: bool, has_digits: bool, allowed_chars: str
     ) -> list[int]:
+        """Executes get number tokens."""
         def is_valid_num(s: str) -> bool:
+            """Executes is valid num."""
             if is_empty_prefix:
                 s = s.lstrip()
             if not s:
@@ -155,6 +166,7 @@ class TokenMasker:
     def _get_tokens_for_value(
         self, current_prefix: str, context: dict[str, Any]
     ) -> list[int]:
+        """Executes get tokens for value."""
         current_node = context["stack"][-1]
 
         # get the schema for the current value we are parsing

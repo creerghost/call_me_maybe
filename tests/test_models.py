@@ -1,7 +1,15 @@
+"""Module for test_models.py."""
+
 from pydantic import ValidationError
 from typing import Any
-from src.models import FunctionParameter, FunctionDefinition, TestPrompt, FunctionCallResult
+from src.models import (
+    FunctionParameter,
+    FunctionDefinition,
+    TestPrompt,
+    FunctionCallResult
+)
 import pytest
+
 
 def test_function_parameter_valid() -> None:
     """Tests successful validation of a correct function parameter."""

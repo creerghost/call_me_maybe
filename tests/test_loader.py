@@ -1,9 +1,9 @@
+"""Module for test_loader.py."""
+
 import pytest
 import json
 import os
 from pathlib import Path
-from pydantic import ValidationError
-from src.models import FunctionDefinition, TestPrompt
 from src.catch import LoaderError
 from src.loader import Loader
 

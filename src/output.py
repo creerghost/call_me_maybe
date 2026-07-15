@@ -1,9 +1,12 @@
+"""Module for writing generation results to disk."""
+
 import json
 from pathlib import Path
 from .models import FunctionCallResult
 
 
 class OutputWriter:
+    """Handles writing the final structured JSON results."""
     @staticmethod
     def write_output(
         results: list[FunctionCallResult], output_path: str

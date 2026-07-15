@@ -1,9 +1,12 @@
+"""Module for loading and interacting with HuggingFace LLMs."""
+
 import importlib
 from typing import Any
 import numpy as np
 
 
 class LLM:
+    """Wrapper class for HuggingFace causal language models."""
     def __init__(
         self,
         llm_path: str,

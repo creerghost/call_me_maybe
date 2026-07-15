@@ -1,3 +1,5 @@
+"""Module for constrained autoregressive decoding."""
+
 from typing import Any, Generator
 from .llm import LLM
 from .models import (
@@ -14,7 +16,9 @@ import torch
 
 
 class ConstrainedDecoder:
+    """State machine driven generator that intercepts LLM outputs."""
     def __init__(self, llm: LLM) -> None:
+        """Initializes the instance."""
         self.llm = llm
         self.fsm = JSONStateMachine()
         self.masker = TokenMasker(llm)
@@ -31,6 +35,7 @@ class ConstrainedDecoder:
         user_question: str,
         func_defs: list[FunctionDefinition],
     ) -> Generator[GenerationEvent, None, None]:
+        """Executes generate."""
         input_ids = self.llm.encode(prompt)
 
         state = JSONState.EXPECT_OBJECT_START
@@ -125,6 +130,7 @@ class ConstrainedDecoder:
         state_token_count: int,
         valid_ids: list[int],
     ) -> list[int]:
+        """Executes handle error recovery."""
         if state == JSONState.EXPECT_VALUE:
             current_node = context["stack"][-1]
             val_type = current_node.get_child_type(context.get("current_key"))
@@ -138,6 +144,7 @@ class ConstrainedDecoder:
     def _fast_forward_token(
         self, valid_ids: list[int], state: JSONState
     ) -> tuple[int, str]:
+        """Executes fast forward token."""
         next_token_id = valid_ids[0]
         token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
         return next_token_id, token_str
@@ -151,6 +158,7 @@ class ConstrainedDecoder:
         context: dict[str, Any],
         state_token_count: int,
     ) -> tuple[int, str, list[float]]:
+        """Executes generate token with llm."""
         logits = self.llm.get_logits(input_ids + generated_tokens)
 
         logits_t = torch.tensor(logits, dtype=torch.float32)

@@ -1,10 +1,14 @@
+"""Module for test_output.py."""
+
 import pytest
 import json
 from pathlib import Path
 from src.models import FunctionCallResult
 from src.output import OutputWriter
 
+
 def test_save_json_success(tmp_path: Path) -> None:
+    """Tests that save json success."""
     out_file: Path = tmp_path / "answers.json"
 
     fake_answers = [
@@ -22,7 +26,9 @@ def test_save_json_success(tmp_path: Path) -> None:
     assert len(saved_data) == 1
     assert saved_data[0]["name"] == "get_weather"
 
+
 def test_save_json_empty_path() -> None:
+    """Tests that save json empty path."""
     fake_answers = [
         FunctionCallResult(
             prompt="test",

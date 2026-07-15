@@ -1,9 +1,12 @@
+"""Module for test_prompt.py."""
+
 from pydantic import ValidationError
 from src.models import FunctionDefinition, FunctionParameter
 from src.catch import PromptConstructionError
 from src.prompt import PromptConstructor
 from typing import Any
 import pytest
+
 
 def test_build_prompt_valid() -> None:
     """Tests successful construction of a prompt with valid inputs."""

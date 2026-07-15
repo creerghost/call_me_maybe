@@ -94,13 +94,13 @@ clean-cache:
 
 lint:
 	@printf "$(CYAN)Running standard linting...$(RESET)\n"
-	$(UV) run flake8 src/
-	$(UV) run mypy -p src --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+	$(UV) run flake8 src/ tests/
+	$(UV) run mypy src/ tests/ --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 
 lint-strict:
 	@printf "$(CYAN)Running strict linting...$(RESET)\n"
-	$(UV) run flake8 src/
-	$(UV) run mypy -p src --strict
+	$(UV) run flake8 src/ tests/
+	$(UV) run mypy src/ tests/ --strict
 
 help:
 	@printf "============================================================================\n"

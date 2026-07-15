@@ -1,3 +1,5 @@
+"""Module for the JSON Finite State Machine."""
+
 from enum import Enum, auto
 from typing import Any, TYPE_CHECKING
 
@@ -7,6 +9,7 @@ if TYPE_CHECKING:
 
 
 class JSONState(Enum):
+    """Represents a discrete state within the JSON generation process."""
     EXPECT_OBJECT_START = auto()
     EXPECT_ARRAY_START = auto()
     EXPECT_KEY = auto()
@@ -17,9 +20,11 @@ class JSONState(Enum):
 
 
 class JSONStateMachine:
+    """Executes JSONStateMachine."""
     def _transition_to_value(
         self, val_schema: Any, stack: list[SchemaNode]
     ) -> tuple[JSONState, str]:
+        """Executes transition to value."""
         S = JSONState
         val_type = val_schema.type if val_schema else "string"
 
@@ -51,6 +56,7 @@ class JSONStateMachine:
         # always looking at the top of the stack
         # tells us if we are currently inside an obj or an arr
         # and what keys we are still waiting for
+        """Executes transition state."""
         S = JSONState
         stack = context["stack"]
         current_node: Any = stack[-1] if stack else None
