@@ -1,5 +1,3 @@
-"""Module for test_loader.py."""
-
 import pytest
 import json
 import os

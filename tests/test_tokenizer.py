@@ -1,5 +1,3 @@
-"""Module for test_tokenizer.py."""
-
 import sys
 import os
 import pytest

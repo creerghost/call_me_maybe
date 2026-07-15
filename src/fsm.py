@@ -1,5 +1,3 @@
-"""Module for the JSON Finite State Machine."""
-
 from enum import Enum, auto
 from typing import Any, TYPE_CHECKING
 
@@ -10,6 +8,7 @@ if TYPE_CHECKING:
 
 class JSONState(Enum):
     """Represents a discrete state within the JSON generation process."""
+
     EXPECT_OBJECT_START = auto()
     EXPECT_ARRAY_START = auto()
     EXPECT_KEY = auto()
@@ -20,11 +19,23 @@ class JSONState(Enum):
 
 
 class JSONStateMachine:
-    """Executes JSONStateMachine."""
+    """Maintains and transitions the state of the JSON parser during
+    generation."""
+
     def _transition_to_value(
         self, val_schema: Any, stack: list[SchemaNode]
     ) -> tuple[JSONState, str]:
-        """Executes transition to value."""
+        """Determines the next state when transitioning into a new JSON value.
+
+        Args:
+            val_schema (Any): The schema definition for the value being parsed.
+            stack (list[SchemaNode]): The current stack of nested
+                JSON objects/arrays.
+
+        Returns:
+            tuple[JSONState, str]: The next state and any forced prefix
+                to output.
+        """
         S = JSONState
         val_type = val_schema.type if val_schema else "string"
 
@@ -56,7 +67,20 @@ class JSONStateMachine:
         # always looking at the top of the stack
         # tells us if we are currently inside an obj or an arr
         # and what keys we are still waiting for
-        """Executes transition state."""
+        """Evaluates the current token prefix and transitions the state
+        machine.
+
+        Args:
+            state (JSONState): The current state of the machine.
+            current_prefix (str): The accumulated string of the current
+                token being parsed.
+            context (dict[str, Any]): Global context containing the
+                stack, remaining keys, and function definitions.
+
+        Returns:
+            tuple[JSONState, str]: The new state after transition and
+                any forced prefix.
+        """
         S = JSONState
         stack = context["stack"]
         current_node: Any = stack[-1] if stack else None

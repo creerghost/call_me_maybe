@@ -1,5 +1,3 @@
-"""Module for test_output.py."""
-
 import pytest
 import json
 from pathlib import Path

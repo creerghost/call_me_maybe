@@ -1,5 +1,3 @@
-"""Entry point for the call_me_maybe application."""
-
 import argparse
 import json
 

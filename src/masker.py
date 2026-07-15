@@ -1,5 +1,3 @@
-"""Module for dynamically masking LLM vocabularies."""
-
 from typing import Any, cast
 from functools import lru_cache
 import numpy as np
@@ -9,6 +7,7 @@ from .llm import LLM
 
 class TokenMasker:
     """Filters valid tokens based on JSON state and schemas."""
+
     def __init__(self, llm: LLM) -> None:
         """Initializes the instance."""
         self.llm = llm
@@ -52,7 +51,20 @@ class TokenMasker:
     def get_valid_tokens_for_state(
         self, state: JSONState, current_prefix: str, context: dict[str, Any]
     ) -> list[int]:
-        """Executes get valid tokens for state."""
+        """Calculates which tokens are valid given the current JSON parsing
+        state.
+
+        Args:
+            state (JSONState): The current state of the FSM.
+            current_prefix (str): The accumulated string for the
+                current token being processed.
+            context (dict[str, Any]): Generation context including the
+                node stack.
+
+        Returns:
+            list[int]: A list of allowed token IDs from the LLM's
+                vocabulary.
+        """
         handler = self.state_handlers.get(state)
         if handler:
             return handler(current_prefix, context)
@@ -62,7 +74,16 @@ class TokenMasker:
     def _get_tokens_for_string(
         self, expected: str, curr_prefix: str
     ) -> list[int]:
-        """Executes get tokens for string."""
+        """Finds all tokens that match a specific exact string prefix.
+
+        Args:
+            expected (str): The exact string we are trying to enforce.
+            curr_prefix (str): What has been generated so far for
+                this state.
+
+        Returns:
+            list[int]: Token IDs that legally continue the string.
+        """
         curr_prefix = curr_prefix.lstrip()
         if curr_prefix == expected or not expected.startswith(curr_prefix):
             return []
@@ -87,7 +108,16 @@ class TokenMasker:
     def _get_tokens_for_options(
         self, options: list[str], current_prefix: str
     ) -> list[int]:
-        """Executes get tokens for options."""
+        """Finds tokens that match any of the provided string options.
+
+        Args:
+            options (list[str]): The valid string choices
+                (e.g., dictionary keys).
+            current_prefix (str): The currently generated prefix.
+
+        Returns:
+            list[int]: Allowed token IDs.
+        """
         valid_ids = set()
         current_prefix = current_prefix.strip()
 
@@ -101,7 +131,16 @@ class TokenMasker:
     def _get_tokens_for_comma_or_end(
         self, current_prefix: str, context: dict[str, Any]
     ) -> list[int]:
-        """Executes get tokens for comma or end."""
+        """Finds tokens representing either a comma or closing bracket/brace.
+
+        Args:
+            current_prefix (str): The currently generated prefix.
+            context (dict[str, Any]): Context stack used to determine
+                if we are in an array or object.
+
+        Returns:
+            list[int]: Allowed token IDs.
+        """
         stack = context["stack"]
         if not stack:
             return []
@@ -124,7 +163,13 @@ class TokenMasker:
     @lru_cache(maxsize=1024)
     def _get_string_tokens(self) -> list[int]:
         # Ban tokens containing quote to prevent FSM spillover
-        """Executes get string tokens."""
+        """Computes the valid tokens that can be emitted inside a JSON string
+        value.
+
+        Returns:
+            list[int]: Token IDs that do not contain quotes or
+                newlines.
+        """
         no_quote_mask = np.char.find(self.token_strs, '"') == -1
         # Explicitly allow exact quote to close the string
         exact_quote_mask = np.char.strip(self.token_strs) == '"'
@@ -145,9 +190,22 @@ class TokenMasker:
     def _get_number_tokens(
         self, is_empty_prefix: bool, has_digits: bool, allowed_chars: str
     ) -> list[int]:
-        """Executes get number tokens."""
+        """Computes the valid tokens that can be emitted inside a JSON number
+        value.
+
+        Args:
+            is_empty_prefix (bool): True if no number characters
+                have been emitted yet.
+            has_digits (bool): True if digits have already been
+                emitted.
+            allowed_chars (str): Characters allowed to terminate
+                the number (e.g., ',}').
+
+        Returns:
+            list[int]: Allowed token IDs for a valid numeric value.
+        """
+
         def is_valid_num(s: str) -> bool:
-            """Executes is valid num."""
             if is_empty_prefix:
                 s = s.lstrip()
             if not s:
@@ -166,7 +224,17 @@ class TokenMasker:
     def _get_tokens_for_value(
         self, current_prefix: str, context: dict[str, Any]
     ) -> list[int]:
-        """Executes get tokens for value."""
+        """Delegates token masking logic based on the schema type of the
+        current value.
+
+        Args:
+            current_prefix (str): The prefix of the value being generated.
+            context (dict[str, Any]): Context dict containing the stack
+                to identify the value type.
+
+        Returns:
+            list[int]: Allowed token IDs based on type constraints.
+        """
         current_node = context["stack"][-1]
 
         # get the schema for the current value we are parsing

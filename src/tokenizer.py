@@ -1,5 +1,3 @@
-"""Module for custom Byte-Pair Encoding (BPE)."""
-
 import numpy as np
 import json
 import re
@@ -17,13 +15,18 @@ e r
 
 class BPETokenizer:
     """Regex-based BPE tokenizer matching HuggingFace specs."""
+
     def __init__(self, vocab_file: str, merges_file: str):
         # vocab_file contains all tokens the model already have
         # merges_file contains an ordered list of priority pairs
         # bpe works by iteratively squashing two tokens into one
         # merges_file sets an order which 2 tokens squash first
+        """Initializes the BPE tokenizer with vocabulary and merge rules.
 
-        """Initializes the instance."""
+        Args:
+            vocab_file (str): Path to the JSON vocabulary file.
+            merges_file (str): Path to the merges.txt file.
+        """
         with open(vocab_file, "r", encoding="utf-8") as f:
             self.vocab: dict[str, int] = json.load(f)
         self.vocab_rev: dict[int, str] = {v: k for k, v in self.vocab.items()}
@@ -48,6 +51,7 @@ class BPETokenizer:
         # of the next word
         self.pat = re.compile(
             r"""'s|'t|'re|'ve|'m|'ll|'d| ?\w+| ?[^\s\w]+|\s+(?!\S)|\s+"""
+
         )
 
     @staticmethod
@@ -75,7 +79,14 @@ class BPETokenizer:
 
     def bpe(self, token: str) -> str:
         # bpe merge loop avoiding recursion!!
-        """Executes bpe."""
+        """Applies Byte-Pair Encoding merges to a single word token.
+
+        Args:
+            token (str): The unicode-mapped byte string of a word.
+
+        Returns:
+            str: Space-separated string of BPE subword tokens.
+        """
         if token in self.cache:
             return self.cache[token]
 
@@ -112,7 +123,14 @@ class BPETokenizer:
         return res
 
     def encode(self, text: str) -> list[int]:
-        """Executes encode."""
+        """Encodes a full text string into a list of BPE token IDs.
+
+        Args:
+            text (str): The raw text string to encode.
+
+        Returns:
+            list[int]: A list of integer token IDs corresponding to the text.
+        """
         bpe_token_ids = []
         # split text into words via regex
         matches: list[str] = re.findall(self.pat, text)
@@ -131,7 +149,14 @@ class BPETokenizer:
 
     def decode(self, tokens: list[int]) -> str:
         # look up the string for each id and join them into one
-        """Executes decode."""
+        """Decodes a list of integer token IDs back into a raw text string.
+
+        Args:
+            tokens (list[int]): The list of token IDs to decode.
+
+        Returns:
+            str: The decoded human-readable text string.
+        """
         text = "".join([self.vocab_rev.get(token, "") for token in tokens])
 
         bytes: list[int] = [self.byte_decoder[c] for c in text]

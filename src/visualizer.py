@@ -1,5 +1,3 @@
-"""Module for terminal-based visualization of the generation process."""
-
 import time
 from typing import Optional
 import numpy as np
@@ -8,6 +6,7 @@ from .models import GenerationEvent
 
 class Visualizer:
     """Renders a real-time terminal dashboard tracking generation metrics."""
+
     def __init__(self, id2token: dict[int, str]):
         """Initializes the instance."""
         self.start_time: Optional[float] = None
@@ -15,7 +14,12 @@ class Visualizer:
         self.id2token = id2token
 
     def render(self, event: GenerationEvent) -> None:
-        """Executes render."""
+        """Renders the current state of generation to the terminal.
+
+        Args:
+            event (GenerationEvent): The latest generation event
+                containing all metrics.
+        """
         if self.start_time is None:
             self.start_time = time.time()
 

@@ -1,5 +1,3 @@
-"""Module defining Pydantic models for type safety."""
-
 from __future__ import annotations
 from pydantic import BaseModel, model_validator, ConfigDict
 from typing import Any, Literal, Self, Optional
@@ -8,6 +6,7 @@ from .fsm import JSONState
 
 class FunctionParameter(BaseModel):
     """Base configuration model."""
+
     model_config = ConfigDict(extra="forbid")
     type: Literal[
         "string",
@@ -24,7 +23,8 @@ class FunctionParameter(BaseModel):
 
 
 class FunctionDefinition(BaseModel):
-    """Executes FunctionDefinition."""
+    """Defines an available function and its parameter schema."""
+
     model_config = ConfigDict(extra="forbid")
     name: str
     description: str
@@ -52,7 +52,8 @@ class FunctionDefinition(BaseModel):
 
 
 class TestPrompt(BaseModel):
-    """Executes TestPrompt."""
+    """Defines a user test prompt mapped to an expected function call."""
+
     __test__ = False  # tells pytest to not treat it as a test
     model_config = ConfigDict(extra="forbid")
     prompt: str
@@ -73,7 +74,8 @@ class TestPrompt(BaseModel):
 
 
 class FunctionCallResult(BaseModel):
-    """Executes FunctionCallResult."""
+    """Represents the final, parsed output of the constrained generation."""
+
     model_config = ConfigDict(extra="forbid")
     prompt: str
     name: str
@@ -81,7 +83,8 @@ class FunctionCallResult(BaseModel):
 
 
 class SchemaNode(BaseModel):
-    """Executes SchemaNode."""
+    """Represents a node in the nested JSON schema being generated."""
+
     type: Literal[
         "object", "array", "string", "number", "integer", "boolean", "enum"
     ]
@@ -107,7 +110,8 @@ class SchemaNode(BaseModel):
 
 
 class GenerationEvent(BaseModel):
-    """Executes GenerationEvent."""
+    """Event payload emitted after every single token is generated."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
     user_question: str
     input_ids: list[int]

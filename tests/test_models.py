@@ -1,5 +1,3 @@
-"""Module for test_models.py."""
-
 from pydantic import ValidationError
 from typing import Any
 from src.models import (

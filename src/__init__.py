@@ -1,5 +1,3 @@
-"""Call Me Maybe: Constrained decoding engine."""
-
 from .decoder import ConstrainedDecoder
 from .llm import LLM
 from .loader import Loader

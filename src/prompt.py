@@ -1,11 +1,10 @@
-"""Module for constructing LLM prompts."""
-
 from .models import FunctionDefinition
 from .catch import PromptConstructionError
 
 
 class PromptConstructor:
     """Constructs dynamic templates for LLM instructions."""
+
     @staticmethod
     def build_prompt(
         functions: list[FunctionDefinition], user_prompt: str

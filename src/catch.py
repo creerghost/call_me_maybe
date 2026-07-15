@@ -1,5 +1,3 @@
-"""Module defining custom exception types."""
-
 from functools import wraps
 from json import JSONDecodeError
 from typing import Any, Callable
@@ -9,6 +7,7 @@ import traceback
 
 class PromptConstructionError(Exception):
     """Base class for all Loader related exceptions."""
+
     """Raised when prompt construction fails."""
 
 
@@ -28,7 +27,21 @@ def catch(fn: Callable[..., Any]) -> Callable[..., Any]:
 
     @wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        """Executes wrapper."""
+        """Executes the wrapped loader function and catches generic exceptions.
+
+        Args:
+            *args: Positional arguments for the wrapped function.
+            **kwargs: Keyword arguments for the wrapped function.
+
+        Raises:
+            LoaderError: If any generic exception is thrown by the
+                wrapped function.
+            PromptConstructionError: If any exception is thrown while
+                building prompts.
+
+        Returns:
+            Any: The original return value of the wrapped function.
+        """
         try:
             return fn(*args, **kwargs)
         except JSONDecodeError as e:

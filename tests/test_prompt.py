@@ -1,5 +1,3 @@
-"""Module for test_prompt.py."""
-
 from pydantic import ValidationError
 from src.models import FunctionDefinition, FunctionParameter
 from src.catch import PromptConstructionError
