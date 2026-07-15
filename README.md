@@ -35,6 +35,7 @@ While massive models <sup>[3](#glossary-3)</sup> like GPT-4 can reliably output 
 
 ### Bonus Features Implemented:
 - **CLI Visualization Dashboard:** Added a `--visual` flag to render a real-time, colorful dashboard tracking Tokens Per Second (TPS) <sup>[14](#glossary-14)</sup>, live JSON path contexts, and Numpy-powered Top-K alternative token probabilities.
+- **Interactive Mode:** Added an `--interactive` flag (and `make run-interactive`) to bypass batch processing and prompt the user continuously for custom inputs directly from the terminal.
 - **Custom BPE Tokenizer:** A from-scratch, pure Python `regex` Byte-Pair Encoding <sup>[19](#glossary-19)</sup> <sup>[15](#glossary-15)</sup> tokenizer (enabled via `--tokenizer`) mapping raw bytes to unicode for strict vocabulary alignment without depending on HuggingFace tokenizers.
 - **Multiple Model Support:** The engine dynamically supports loading any HuggingFace causal language model via the `--model` CLI flag (e.g., `microsoft/Phi-3-mini-4k-instruct` or `TinyLlama/TinyLlama-1.1B-Chat-v1.0`).
 - **Performance Optimizations:** Implemented LRU memoization <sup>[16](#glossary-16)</sup> for token masks, a "fast-forward" generation skip for deterministic tokens, and utilized `numpy` arrays and PyTorch tensors for vectorized logit masking to avoid slow native Python loops, drastically boosting Tokens Per Second (TPS).
@@ -200,6 +201,11 @@ make run-visual
 To run full visualization using the **custom BPE tokenizer**:
 ```bash
 make run-full
+```
+
+To run the pipeline in **interactive mode**, allowing you to continuously type custom prompts from your keyboard instead of reading from the input JSON:
+```bash
+make run-interactive
 ```
 
 ### Using Custom Models

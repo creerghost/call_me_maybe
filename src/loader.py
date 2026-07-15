@@ -7,23 +7,23 @@ from .catch import LoaderError
 class Loader:
     """Responsible for loading and validating input JSON files."""
 
-    def __init__(self, fdef_name: str, fcall_name: str) -> None:
+    def __init__(self, fdef_name: str, fcall_name: str | None = None) -> None:
         """Initializes the Loader and parses the configuration files.
 
         Args:
             fdef_name (str): Path to the function definitions JSON file.
-            fcall_name (str): Path to the test prompts JSON file.
+            fcall_name (str | None): Path to the test prompts JSON file.
         """
         self.fn_defs: list[FunctionDefinition] = []
         self.test_prompts: list[TestPrompt] = []
         self._load(fdef_name, fcall_name)
 
-    def _load(self, fdef: str, fcall: str) -> None:
+    def _load(self, fdef: str, fcall: str | None) -> None:
         """Loads, parses, and validates the input JSON files.
 
         Args:
             fdef (str): Path to the function definitions JSON file.
-            fcall (str): Path to the test prompts JSON file.
+            fcall (str | None): Path to the test prompts JSON file.
 
         Raises:
             LoaderError: If files are missing, malformed, or fail Pydantic
@@ -43,15 +43,16 @@ class Loader:
         except ValidationError as e:
             raise LoaderError(f"Schema mismatch in {fdef}:\n{e}")
 
-        try:
-            with open(fcall, "r") as f:
-                json_prompts = json.load(f)
-            self.test_prompts = [TestPrompt(**p) for p in json_prompts]
-            if not self.test_prompts:
-                raise LoaderError("Json is empty.")
-        except FileNotFoundError:
-            raise LoaderError(f"File not found: {fcall}")
-        except json.JSONDecodeError as e:
-            raise LoaderError(f"Invalid JSON in {fcall}: {e}")
-        except ValidationError as e:
-            raise LoaderError(f"Schema mismatch in {fcall}:\n{e}")
+        if fcall:
+            try:
+                with open(fcall, "r") as f:
+                    json_prompts = json.load(f)
+                self.test_prompts = [TestPrompt(**p) for p in json_prompts]
+                if not self.test_prompts:
+                    raise LoaderError("Json is empty.")
+            except FileNotFoundError:
+                raise LoaderError(f"File not found: {fcall}")
+            except json.JSONDecodeError as e:
+                raise LoaderError(f"Invalid JSON in {fcall}: {e}")
+            except ValidationError as e:
+                raise LoaderError(f"Schema mismatch in {fcall}:\n{e}")

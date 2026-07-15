@@ -48,6 +48,10 @@ run-full: install
 	@printf "$(MAGENTA)Running full suite (visual + tokenizer)...$(RESET)\n"
 	$(PYTHON) -m src $(ARGS) --visual --tokenizer
 
+run-interactive: install
+	@printf "$(MAGENTA)Running interactive prompt mode...$(RESET)\n"
+	$(PYTHON) -m src $(ARGS) --interactive
+
 run-visual: install
 	@printf "$(MAGENTA)Running with visual mode...$(RESET)\n"
 	$(PYTHON) -m src $(ARGS) --visual
@@ -124,6 +128,7 @@ help:
 	@printf "  $(GREEN)run$(RESET)                - Run the comprehensive pytest suite for evaluators\n"
 	@printf "  $(GREEN)run-visual$(RESET)         - Run the main script with visual mode\n"
 	@printf "  $(GREEN)run-full$(RESET)           - Run the main script with visual mode and tokenizer\n"
+	@printf "  $(GREEN)run-interactive$(RESET)    - Run the interactive prompt mode\n"
 	@printf "  $(GREEN)run-custom$(RESET)         - Run the main script with custom model\n"
 	@printf "  $(GREEN)run-custom-visual$(RESET)  - Run the main script with custom model and visual mode\n"
 	@printf "  $(GREEN)run-custom-full$(RESET)    - Run the main script with custom model, visual mode, and tokenizer\n"
@@ -136,4 +141,4 @@ help:
 	@printf "  $(GREEN)help$(RESET)               - Show this help message\n"
 	@printf "===========================================================================\n"
 
-.PHONY: all install run run-full run-visual run-custom run-custom-visual run-custom-full test debug clean clean-cache lint lint-strict help
+.PHONY: all install run run-full run-visual run-interactive run-custom run-custom-visual run-custom-full test debug clean clean-cache lint lint-strict help

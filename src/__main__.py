@@ -19,13 +19,19 @@ def build_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--interactive", "-i", action="store_true",
+        help="Run in interactive mode, prompting for user input"
+    )
+    parser.add_argument(
         "--functions_definition",
         required=True,
         help="Path to functions definition json file"
     )
-    parser.add_argument("--input", required=True,
-                        help="Path to function calling json file")
-    parser.add_argument("--output", required=True, help="Path to output file")
+    parser.add_argument(
+        "--input",
+        help="Path to function calling json file"
+    )
+    parser.add_argument("--output", help="Path to output file")
     parser.add_argument("--llm_path", required=True, help="Path to LLM")
     parser.add_argument("--llm_name", required=True,
                         help="Name of LLM model (name of class)")
@@ -65,7 +71,10 @@ def generate_result(
     visualizer = Visualizer(decoder.llm.id2token) if visualize else None
 
     generated_tokens = []
-    for event in decoder.generate(prompt, test_prompt.prompt, loader.fn_defs):
+
+    for event in decoder.generate(
+        prompt, test_prompt.prompt, loader.fn_defs
+    ):
         if visualizer:
             visualizer.render(event)
         generated_tokens.append(event.next_token_id)
@@ -95,10 +104,27 @@ def run_pipeline(args: argparse.Namespace) -> None:
     )
     decoder = ConstrainedDecoder(llm)
 
-    results = []
-    for i, test_prompt in enumerate(loader.test_prompts):
-        res = generate_result(decoder, loader, test_prompt, args.visual)
-        results.append(res)
+    if args.interactive:
+        print("\n=== Interactive Mode ===")
+        print("Type 'exit' or 'quit' to stop.")
+        while True:
+            try:
+                user_input = input("\nEnter prompt: ")
+                if user_input.strip().lower() in ("exit", "quit"):
+                    break
+                test_prompt = TestPrompt(prompt=user_input)
+                res = generate_result(
+                    decoder, loader, test_prompt, args.visual
+                )
+                print(f"\nResult: {res.model_dump_json(indent=2)}")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+    else:
+        results = []
+        for i, test_prompt in enumerate(loader.test_prompts):
+            res = generate_result(decoder, loader, test_prompt, args.visual)
+            results.append(res)
         OutputWriter.write_output(results, args.output)
 
 
@@ -107,6 +133,10 @@ def main() -> None:
     """Parses command line arguments and initiates the application pipeline."""
     parser = build_parser()
     args = parser.parse_args()
+    if not args.interactive and (not args.input or not args.output):
+        parser.error(
+            "--input and --output are required when not in interactive mode"
+        )
     run_pipeline(args)
 
 
