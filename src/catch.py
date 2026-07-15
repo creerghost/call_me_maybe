@@ -3,6 +3,7 @@ from json import JSONDecodeError
 from typing import Any, Callable
 from argparse import ArgumentError, ArgumentTypeError
 import traceback
+import sys
 
 
 class PromptConstructionError(Exception):
@@ -42,32 +43,32 @@ def catch(fn: Callable[..., Any]) -> Callable[..., Any]:
             return fn(*args, **kwargs)
         except JSONDecodeError as e:
             print(f"JSON error: {e}")
-            quit(1)
+            sys.exit(1)
         except FileNotFoundError as e:
             print(f"Error: File missing: {e}")
-            quit(1)
+            sys.exit(1)
         except ImportError as e:
             print(f"Import error: {e}")
-            quit(1)
+            sys.exit(1)
         except PromptConstructionError as e:
             print(f"Error during prompt construction: {e}")
-            quit(1)
+            sys.exit(1)
         except LoaderError as e:
             print(f"Loader error: {e}")
-            quit(1)
+            sys.exit(1)
         except (ArgumentTypeError, ArgumentError) as e:
             print(f"Argument parser error: {e}")
-            quit(1)
+            sys.exit(1)
         except (ValueError, TypeError) as e:
             print(f"Error: {e}")
             traceback.print_exc()
-            quit(1)
+            sys.exit(1)
         except KeyboardInterrupt:
             print("\nKeyboard interrupt. Bye!")
-            quit(0)
+            sys.exit(0)
         except Exception as e:
             print(f"Unexpected error: {e}")
             traceback.print_exc()
-            quit(1)
+            sys.exit(1)
 
     return wrapper

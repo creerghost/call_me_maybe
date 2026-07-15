@@ -62,3 +62,39 @@ def test_build_prompt_wrong_functions() -> None:
         )
     # this line will never run tho
         PromptConstructor.build_prompt([fd1, fd2], prompt)
+
+
+def test_build_prompt_multiple_functions() -> None:
+    """Tests that prompts with multiple functions list all of them."""
+    param_num = FunctionParameter(type="number")
+    param_str = FunctionParameter(type="string")
+    fn1 = FunctionDefinition(
+        name="fn_add",
+        description="Add numbers",
+        parameters={"a": param_num, "b": param_num},
+        returns=param_num,
+    )
+    fn2 = FunctionDefinition(
+        name="fn_greet",
+        description="Greet someone",
+        parameters={"name": param_str},
+        returns=param_str,
+    )
+    result = PromptConstructor.build_prompt(
+        [fn1, fn2], "Add 5 and greet john"
+    )
+    assert "fn_add" in result
+    assert "fn_greet" in result
+
+
+def test_build_prompt_empty_string_prompt() -> None:
+    """Tests that an empty string prompt raises PromptConstructionError."""
+    param = FunctionParameter(type="number")
+    fd = FunctionDefinition(
+        name="fn_test",
+        description="test",
+        parameters={"a": param},
+        returns=param,
+    )
+    with pytest.raises(PromptConstructionError):
+        PromptConstructor.build_prompt([fd], "")

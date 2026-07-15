@@ -40,8 +40,8 @@ install:
 	@printf "$(CYAN)Syncing dependencies with uv...$(RESET)\n"
 	$(UV) sync
 
-run: install test
-	@printf "$(MAGENTA)Running evaluator test suite...$(RESET)\n"
+run: install
+	@printf "$(MAGENTA)Running main pipeline...$(RESET)\n"
 	$(PYTHON) -m src $(ARGS)
 
 run-full: install
@@ -125,7 +125,7 @@ help:
 	@printf "$(RESET)----------------------------------------------------------------------------$(RESET)\n"
 	@printf "$(YELLOW)Available targets:$(RESET)\n"
 	@printf "  $(GREEN)install$(RESET)            - Install dependencies using uv\n"
-	@printf "  $(GREEN)run$(RESET)                - Run the comprehensive pytest suite for evaluators\n"
+	@printf "  $(GREEN)run$(RESET)                - Run the main pipeline\n"
 	@printf "  $(GREEN)run-visual$(RESET)         - Run the main script with visual mode\n"
 	@printf "  $(GREEN)run-full$(RESET)           - Run the main script with visual mode and tokenizer\n"
 	@printf "  $(GREEN)run-interactive$(RESET)    - Run the interactive prompt mode\n"

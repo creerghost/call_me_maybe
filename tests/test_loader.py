@@ -77,3 +77,60 @@ def test_loader_broken_json_empty(tmp_path: Path) -> None:
 
     with pytest.raises(LoaderError):
         Loader(str(broken_file), str(broken_file))
+
+
+def test_loader_extra_keys_in_function_def(tmp_path: Path) -> None:
+    """Tests that unexpected keys in function definitions raise LoaderError.
+
+    Args:
+        tmp_path (Path): Pytest fixture providing a temporary directory.
+    """
+    fdef: Path = tmp_path / "bad_def.json"
+    fdef.write_text(json.dumps([{
+        "name": "fn_test",
+        "description": "test",
+        "parameters": {"a": {"type": "string"}},
+        "returns": {"type": "string"},
+        "extra_key": "should fail",
+    }]))
+    with pytest.raises(LoaderError):
+        Loader(str(fdef))
+
+
+def test_loader_missing_required_field(tmp_path: Path) -> None:
+    """Tests that missing required fields raise LoaderError.
+
+    Args:
+        tmp_path (Path): Pytest fixture providing a temporary directory.
+    """
+    fdef: Path = tmp_path / "incomplete.json"
+    fdef.write_text(json.dumps([{
+        "name": "fn_test",
+        "parameters": {"a": {"type": "string"}},
+    }]))
+    with pytest.raises(LoaderError):
+        Loader(str(fdef))
+
+
+def test_loader_empty_array(tmp_path: Path) -> None:
+    """Tests that an empty function definition array raises LoaderError.
+
+    Args:
+        tmp_path (Path): Pytest fixture providing a temporary directory.
+    """
+    fdef: Path = tmp_path / "empty_arr.json"
+    fdef.write_text("[]")
+    with pytest.raises(LoaderError):
+        Loader(str(fdef))
+
+
+def test_loader_null_json(tmp_path: Path) -> None:
+    """Tests that null JSON content raises an error.
+
+    Args:
+        tmp_path (Path): Pytest fixture providing a temporary directory.
+    """
+    fdef: Path = tmp_path / "null.json"
+    fdef.write_text("null")
+    with pytest.raises((LoaderError, TypeError)):
+        Loader(str(fdef))

@@ -24,17 +24,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--functions_definition",
-        required=True,
+        default="data/input/functions_definition.json",
         help="Path to functions definition json file"
     )
     parser.add_argument(
         "--input",
         help="Path to function calling json file"
     )
-    parser.add_argument("--output", help="Path to output file")
-    parser.add_argument("--llm_path", required=True, help="Path to LLM")
-    parser.add_argument("--llm_name", required=True,
-                        help="Name of LLM model (name of class)")
+    parser.add_argument(
+        "--output",
+        default="data/output/function_calling_results.json",
+        help="Path to output file"
+    )
+    parser.add_argument(
+        "--llm_path", default="llm_sdk", help="Path to LLM"
+    )
+    parser.add_argument(
+        "--llm_name", default="Small_LLM_Model",
+        help="Name of LLM model (name of class)"
+    )
     parser.add_argument(
         "--visual",
         action="store_true",
@@ -133,10 +141,8 @@ def main() -> None:
     """Parses command line arguments and initiates the application pipeline."""
     parser = build_parser()
     args = parser.parse_args()
-    if not args.interactive and (not args.input or not args.output):
-        parser.error(
-            "--input and --output are required when not in interactive mode"
-        )
+    if not args.interactive and not args.input:
+        args.input = "data/input/function_calling_tests.json"
     run_pipeline(args)
 
 

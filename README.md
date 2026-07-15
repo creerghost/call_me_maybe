@@ -16,7 +16,7 @@
 11. [Performance analysis](#11-performance-analysis)
 12. [Challenges faced](#12-challenges-faced)
 13. [Testing strategy](#13-testing-strategy)
-13. [Glossary](#14-glossary)
+14. [Glossary](#14-glossary)
 15. [Resources](#15-resources)
 
 ---
@@ -220,7 +220,7 @@ make run-custom-visual
 
 Or with the visualizer using **custom BPE tokenizer**:
 ```bash
-make run-custom-all
+make run-custom-full
 ```
 
 *Note: You may encounter out-of-memory errors on smaller machines if you attempt to load models larger than 2B parameters without quantization <sup>[23](#glossary-23)</sup>.*
@@ -432,5 +432,6 @@ This project was developed with the assistance of an AI utilizing Gemini models 
 - **Architectural Refactoring & Conceptualizing:** While the core concepts like Python generators were already understood, the AI acted as a sounding board to help conceptualize the best way to utilize event-streaming architectures to cleanly decouple the terminal visualizer from the core decoding FSM.
 - **Advanced Implementations:** The AI provided breakdowns of how Byte-Pair Encoding operates under the hood (including bytes-to-unicode mappings and strict regex token isolation), which helped heavily in implementing the custom BPE tokenizer from scratch without HuggingFace dependencies.
 - **Debugging & Resolution:** When dealing with deep architectural crashes like circular imports between `models.py` and `fsm.py`, the AI suggested debugging theories and explained how to properly utilize Python's `typing.TYPE_CHECKING` for static analysis. It also helped debug a tricky `KeyError: 'type'` within the Phi-3 config by explaining how to do runtime dictionary patching.
-- **Documentation & Refactoring:** The AI (Antigravity, an agentic coding assistant powered by Google DeepMind) assisted in structuring and formatting the project documentation. This included organizing the README, converting the technical glossary into a scientific-paper citation format, migrating and restructuring the `pytest` testing suite, enforcing strict static analysis (`mypy` and `flake8`), and heavily optimizing the `Makefile` for clean, colorful CLI outputs.
+- **Documentation & Refactoring:** The AI assisted in structuring and formatting the project documentation. This included organizing the README, converting the technical glossary into a scientific-paper citation format, migrating and restructuring the `pytest` testing suite, enforcing strict static analysis (`mypy` and `flake8`), and heavily optimizing the `Makefile` for clean, colorful CLI outputs.
 - **Mathematics:** The AI was utilized as a tutor to break down complex mathematical concepts like logit manipulation, vocabulary filtering, and Numpy Top-K Softmax probability visualization so they could be confidently implemented in the engine.
+- **Tests:** The AI provided various test cases (mostly edge cases) that can be implemented.
