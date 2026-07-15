@@ -1,12 +1,12 @@
 *This project has been created as part of the 42 curriculum by vlnikola.*
 
-# Call Me Maybe: A Deep Dive into Constrained Decoding \[[9](#14-glossary)\]
+# Call Me Maybe: A Deep Dive into Constrained Decoding
 
 ## Table of Contents
 1. [Description](#1-description)
 2. [Introduction to AI & LLMs](#2-introduction-to-ai--llms)
-3. [Tokenization: The LLM Alphabet](#3-token \[[10](#14-glossary)\]ization-the-llm-alphabet)
-4. [Logits: The Prediction Scoreboard](#4-logit \[[17](#14-glossary)\]s-the-prediction-scoreboard)
+3. [Tokenization: The LLM Alphabet](#3-tokenization-the-llm-alphabet)
+4. [Logits: The Prediction Scoreboard](#4-logits-the-prediction-scoreboard)
 5. [Algorithm explanation](#5-algorithm-explanation)
 6. [Custom BPE Tokenizer Implementation](#6-custom-bpe-tokenizer-implementation)
 7. [Pipeline example](#7-pipeline-example)
@@ -16,28 +16,28 @@
 11. [Performance analysis](#11-performance-analysis)
 12. [Challenges faced](#12-challenges-faced)
 13. [Testing strategy](#13-testing-strategy)
-14. Glossary
+13. [Glossary](#14-glossary)
 15. [Resources](#15-resources)
 
 ---
 
 ## 1. Description
 
-**Call Me Maybe** is a robust pipeline for executing function-calling \[[1](#14-glossary)\] with extremely small Language Models \[[2](#14-glossary)\]. 
+**Call Me Maybe** is a robust pipeline for executing function-calling <sup>[1](#glossary-1)</sup> with extremely small Language Models <sup>[2](#glossary-2)</sup>. 
 
-While massive models \[[3](#14-glossary)\] like GPT-4 can reliably output JSON \[[4](#14-glossary)\] through sheer parameter \[[5](#14-glossary)\] size and RLHF \[[6](#14-glossary)\] training, small models (like 0.5B - 1B parameter models) frequently fail to adhere to strict schemas. This project builds a custom constrained decoding \[[7](#14-glossary)\] engine from scratch in Python that forces any HuggingFace model to output valid JSON matching a predefined schema.
+While massive models <sup>[3](#glossary-3)</sup> like GPT-4 can reliably output JSON <sup>[4](#glossary-4)</sup> through sheer parameter <sup>[5](#glossary-5)</sup> size and RLHF <sup>[6](#glossary-6)</sup> training, small models (like 0.5B - 1B parameter models) frequently fail to adhere to strict schemas. This project builds a custom constrained decoding <sup>[7](#glossary-7)</sup> engine from scratch in Python that forces any HuggingFace model to output valid JSON matching a predefined schema.
 
 ### Core Features:
 - **Zero-Dependency Architecture:** Implemented without heavy frameworks like `outlines` or `guidance`.
-- **Dynamic State Machine \[[8](#14-glossary)\]:** Tracks JSON parsing states (`OBJECT_START`, `KEY_NAME`, `PARAM_VALUE`, etc.).
-- **Type-Enforced Decoding:** Filters token vocabularies \[[11](#14-glossary)\] on the fly based on whether the expected parameter is a string, number, integer, or boolean.
-- **Dynamic Chat Templates \[[12](#14-glossary)\]:** Automatically formats raw prompts \[[13](#14-glossary)\] into the model's native conversational template for higher accuracy.
+- **Dynamic State Machine <sup>[8](#glossary-8)</sup>:** Tracks JSON parsing states (`OBJECT_START`, `KEY_NAME`, `PARAM_VALUE`, etc.).
+- **Type-Enforced Decoding:** Filters token vocabularies <sup>[11](#glossary-11)</sup> on the fly based on whether the expected parameter is a string, number, integer, or boolean.
+- **Dynamic Chat Templates <sup>[12](#glossary-12)</sup>:** Automatically formats raw prompts <sup>[13](#glossary-13)</sup> into the model's native conversational template for higher accuracy.
 
 ### Bonus Features Implemented:
-- **CLI Visualization Dashboard:** Added a `--visual` flag to render a real-time, colorful dashboard tracking Tokens Per Second (TPS) \[[14](#14-glossary)\], live JSON path contexts, and Numpy-powered Top-K alternative token probabilities.
-- **Custom BPE Tokenizer:** A from-scratch, pure Python `regex` Byte-Pair Encoding \[[19](#14-glossary)\] \[[15](#14-glossary)\] tokenizer (enabled via `--tokenizer`) mapping raw bytes to unicode for strict vocabulary alignment without depending on HuggingFace tokenizers.
+- **CLI Visualization Dashboard:** Added a `--visual` flag to render a real-time, colorful dashboard tracking Tokens Per Second (TPS) <sup>[14](#glossary-14)</sup>, live JSON path contexts, and Numpy-powered Top-K alternative token probabilities.
+- **Custom BPE Tokenizer:** A from-scratch, pure Python `regex` Byte-Pair Encoding <sup>[19](#glossary-19)</sup> <sup>[15](#glossary-15)</sup> tokenizer (enabled via `--tokenizer`) mapping raw bytes to unicode for strict vocabulary alignment without depending on HuggingFace tokenizers.
 - **Multiple Model Support:** The engine dynamically supports loading any HuggingFace causal language model via the `--model` CLI flag (e.g., `microsoft/Phi-3-mini-4k-instruct` or `TinyLlama/TinyLlama-1.1B-Chat-v1.0`).
-- **Performance Optimizations:** Implemented LRU memoization \[[16](#14-glossary)\] for token masks, a "fast-forward" generation skip for deterministic tokens, and utilized `numpy` arrays and PyTorch tensors for vectorized logit masking to avoid slow native Python loops, drastically boosting Tokens Per Second (TPS).
+- **Performance Optimizations:** Implemented LRU memoization <sup>[16](#glossary-16)</sup> for token masks, a "fast-forward" generation skip for deterministic tokens, and utilized `numpy` arrays and PyTorch tensors for vectorized logit masking to avoid slow native Python loops, drastically boosting Tokens Per Second (TPS).
 - **Advanced Error Recovery:** Implemented state-bound max-length constraints and dynamic logit boosting to prevent small LLMs from falling into infinite generation loops when trapped in string-generation states.
 - **Comprehensive Test Suite:** Developed a robust `pytest` suite validating schema parsing, Pydantic bounds, and the constrained decoder's edge cases.
 
@@ -49,7 +49,7 @@ Artificial Intelligence (AI) has rapidly evolved, with Large Language Models (LL
 
 Despite their apparent "understanding" of language, LLMs do not comprehend text the way humans do. They operate entirely on statistical probabilities. When you ask an LLM a question, it is mathematically calculating the most likely sequence of words that would follow your question in a typical human conversation.
 
-This probabilistic nature makes LLMs incredibly versatile for creative writing, coding, and chatting. However, it also introduces a significant flaw: **unpredictability**. When a software system requires structured data (like a strict JSON object) to execute a function, the LLM might decide to prepend its response with "Sure, here is your JSON:" or hallucinate \[[18](#14-glossary)\] a completely invalid formatting structure. 
+This probabilistic nature makes LLMs incredibly versatile for creative writing, coding, and chatting. However, it also introduces a significant flaw: **unpredictability**. When a software system requires structured data (like a strict JSON object) to execute a function, the LLM might decide to prepend its response with "Sure, here is your JSON:" or hallucinate <sup>[18](#glossary-18)</sup> a completely invalid formatting structure. 
 
 This project solves that exact problem.
 
@@ -88,7 +88,7 @@ If an LLM is generating JSON, the logit for `{` might be very high at the beginn
 
 ## 5. Algorithm explanation
 
-**Constrained Decoding** acts as a strict set of guardrails on the LLM's autoregressive generation \[[20](#14-glossary)\] process. 
+**Constrained Decoding** acts as a strict set of guardrails on the LLM's autoregressive generation <sup>[20](#glossary-20)</sup> process. 
 
 Normally, an LLM is free to pick whatever token it wants from its entire 150,000-word filing cabinet. In this project, we implement a **Finite State Machine** that tracks exactly where we are in the JSON structure and actively intercepts the generation loop. 
 
@@ -98,11 +98,11 @@ Here is the step-by-step algorithm executed for *every single token*:
 2. **Valid Token Calculation:** Based on the state and the predefined JSON schema, the engine computes which characters are legally allowed next. For instance, if expecting a `boolean`, only tokens starting with `t`, `r`, `u`, `e`, or `f`, `a`, `l`, `s`, `e` are valid.
 3. **Vocabulary Masking:** We search the LLM's entire vocabulary filing cabinet and build an allowed list. Any token that breaks the JSON syntax or schema rules is excluded.
 4. **Logit Hijacking:** We intercept the LLM right *after* it generates the logits (compatibility scores) but *before* it actually outputs the token. We apply our mask, forcefully changing the scores of all invalid tokens to negative infinity (`-inf`).
-5. **Argmax \[[21](#14-glossary)\] Selection:** We let the model pick the token with the highest remaining score. Since all invalid tokens were set to `-inf`, the model is mathematically forced to pick the most likely *valid* token, even if it originally wanted to say something else.
+5. **Argmax <sup>[21](#glossary-21)</sup> Selection:** We let the model pick the token with the highest remaining score. Since all invalid tokens were set to `-inf`, the model is mathematically forced to pick the most likely *valid* token, even if it originally wanted to say something else.
 6. **State Transition:** Based on the chosen token, the state machine transitions to the next logical state (e.g., shifting from `PARAM_VALUE` to expecting a comma `,` or closing bracket `}`).
 
 ### Fast-Forward Optimization
-To significantly improve performance, the algorithm includes a "fast-forward" optimization. If the state machine determines there is only *one* valid token (for example, the only valid token after a key is a colon `:`), the engine completely skips the heavy LLM forward pass \[[22](#14-glossary)\]. It immediately appends the mandatory token and transitions to the next state, drastically cutting down unnecessary compute time.
+To significantly improve performance, the algorithm includes a "fast-forward" optimization. If the state machine determines there is only *one* valid token (for example, the only valid token after a key is a colon `:`), the engine completely skips the heavy LLM forward pass <sup>[22](#glossary-22)</sup>. It immediately appends the mandatory token and transitions to the next state, drastically cutting down unnecessary compute time.
 
 By strictly controlling the logit probabilities at runtime, this algorithm mathematically guarantees that the final output is 100% syntactically perfect JSON matching the exact schema—with zero hallucinations.
 
@@ -217,7 +217,7 @@ Or with the visualizer using **custom BPE tokenizer**:
 make run-custom-all
 ```
 
-*Note: You may encounter out-of-memory errors on smaller machines if you attempt to load models larger than 2B parameters without quantization \[[23](#14-glossary)\].*
+*Note: You may encounter out-of-memory errors on smaller machines if you attempt to load models larger than 2B parameters without quantization <sup>[23](#glossary-23)</sup>.*
 
 ### Understanding the Live Visualization Dashboard
 When running with `--visual`, the terminal will display a real-time dashboard. Here is a breakdown of what each metric means:
@@ -244,7 +244,7 @@ Generated Token: ' :' (ID: 549)
 - **Context Path:** Dynamically infers your exact position within the provided JSON schema (e.g., currently generating the `name` field, which is constrained as an `enum`).
 - **Speed:** Live tracking of Tokens Per Second (TPS), which is a key performance metric for the decoder.
 - **Allowed Tokens:** The exact number of tokens in the 150k vocabulary that mathematically satisfy the JSON schema and current state.
-- **Top Alternatives:** Utilizes `numpy` softmax \[[24](#14-glossary)\] probability analysis to display the top 3 alternative tokens the LLM considered from the *Allowed Tokens* pool, and its confidence percentages for each.
+- **Top Alternatives:** Utilizes `numpy` softmax <sup>[24](#glossary-24)</sup> probability analysis to display the top 3 alternative tokens the LLM considered from the *Allowed Tokens* pool, and its confidence percentages for each.
 
 ---
 
@@ -307,7 +307,7 @@ Tested against `Qwen/Qwen2.5-0.5B` and `TinyLlama-1.1B`:
 
 5. **Error Recovery & Infinite Generation Loops:** 
    - **The Trapped LLM:** While testing `TinyLlama-1.1B`, the model would sometimes forget to close a JSON string with a quote `"`. Because our constrained decoder strictly blocked it from generating invalid JSON syntax (like random brackets or newlines), the model was effectively "trapped" in the `PARAM_VALUE` state. Its internal probability of generating a closing quote dropped to near zero, causing it to hallucinate infinitely long, technically valid string characters (e.g., `"Programming is fun*greeting*world!*greeting..."`).
-   - **Failed Repetition Penalties:** I initially tried to fix this by adding a repetition penalty \[[25](#14-glossary)\] to punish the model for repeating the same words. However, for 1-Billion parameter models, subtracting logits too aggressively (e.g., `-5.0`) made the model mathematically "scared" to choose basic English letters, breaking the text entirely.
+   - **Failed Repetition Penalties:** I initially tried to fix this by adding a repetition penalty <sup>[25](#glossary-25)</sup> to punish the model for repeating the same words. However, for 1-Billion parameter models, subtracting logits too aggressively (e.g., `-5.0`) made the model mathematically "scared" to choose basic English letters, breaking the text entirely.
    - **The Solution (Max-Length Constraints):** To prevent infinite loops, I implemented a state-bound counter. Every time the model generates a character inside a string, a counter increments. If the counter hits a hard limit (e.g., 20 tokens), the decoder acts as a circuit breaker. It forcefully masks the entire vocabulary *except* the closing quote `"`, leaving the model with only one mathematical option: to close the string.
      
      *Implementation Example:*
