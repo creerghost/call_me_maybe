@@ -4,6 +4,7 @@ from .loader import Loader
 from .models import FunctionCallResult, FunctionDefinition, TestPrompt
 from .output import OutputWriter
 from .prompt import PromptConstructor
+from .visualizer import Visualizer
 
 __all__ = [
     "ConstrainedDecoder",
@@ -14,4 +15,5 @@ __all__ = [
     "TestPrompt",
     "OutputWriter",
     "PromptConstructor",
+    "Visualizer",
 ]
