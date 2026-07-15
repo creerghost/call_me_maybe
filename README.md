@@ -45,7 +45,7 @@ While massive models like GPT-4 can reliably output JSON through sheer parameter
 
 ## 2. Introduction to AI & LLMs
 
-Artificial Intelligence (AI) has rapidly evolved, with [Large Language Models (LLMs)](#13-resources) standing at the forefront of natural language processing. At their core, LLMs are incredibly powerful text-prediction engines. You provide them with a chunk of text (a prompt), and their sole objective is to guess what should logically come next based on patterns they've learned from reading vast portions of the internet.
+Artificial Intelligence (AI) has rapidly evolved, with [Large Language Models (LLMs)](#14-glossary) standing at the forefront of natural language processing. At their core, LLMs are incredibly powerful text-prediction engines. You provide them with a chunk of text (a prompt), and their sole objective is to guess what should logically come next based on patterns they've learned from reading vast portions of the internet.
 
 Despite their apparent "understanding" of language, LLMs do not comprehend text the way humans do. They operate entirely on statistical probabilities. When you ask an LLM a question, it is mathematically calculating the most likely sequence of words that would follow your question in a typical human conversation.
 
@@ -57,12 +57,12 @@ This project solves that exact problem.
 
 ## 3. Tokenization: The LLM Alphabet
 
-To understand how we control an LLM, we first must understand how it reads. LLMs do not read letters or words; they read **[tokens](#13-resources)**.
+To understand how we control an LLM, we first must understand how it reads. LLMs do not read letters or words; they read **[tokens](#14-glossary)**.
 
 A token is the fundamental building block of text. It can be a whole word (like `apple`), a chunk of a word (like `pre-` or `-ing`), or even a single character. When an LLM generates text, it spits out one token at a time.
 
 Here is how tokenization works under the hood:
-1. **Chunking:** The tokenizer algorithm splits a sentence into chunks using methods like [Byte-Pair Encoding (BPE)](#13-resources).
+1. **Chunking:** The tokenizer algorithm splits a sentence into chunks using methods like [Byte-Pair Encoding (BPE)](#14-glossary).
 2. **Mapping:** Every unique chunk is mapped to a specific ID number in the model's vocabulary (e.g., `Hello` might be token ID `15496`). 
 3. **Encoding/Decoding:** When you send text to the LLM, the tokenizer translates it into an array of these numbers. When the LLM generates a number, the tokenizer translates it back into readable text.
 
@@ -80,7 +80,7 @@ When an LLM is trying to guess the very next token, it goes through a massive ma
   * For example, the alignment score for an unrelated token like `"cement"` might be heavily negative (e.g., `-15.4`).
   * Conversely, the score for a highly probable token like `"ice"` might be strongly positive (e.g., `18.2`).
 
-These raw compatibility scores are called **[logits](#13-resources)**. A higher logit means the model is very confident that the token should come next. Usually, the model simply picks the token with the highest logit.
+These raw compatibility scores are called **[logits](#14-glossary)**. A higher logit means the model is very confident that the token should come next. Usually, the model simply picks the token with the highest logit.
 
 If an LLM is generating JSON, the logit for `{` might be very high at the beginning. But as the generation continues, the model might get confused and the logit for a conversational token like `I` or `The` might randomly spike.
 
@@ -88,9 +88,9 @@ If an LLM is generating JSON, the logit for `{` might be very high at the beginn
 
 ## 5. Algorithm explanation
 
-**[Constrained Decoding](#13-resources)** acts as a strict set of guardrails on the LLM's autoregressive generation process. 
+**[Constrained Decoding](#14-glossary)** acts as a strict set of guardrails on the LLM's autoregressive generation process. 
 
-Normally, an LLM is free to pick whatever token it wants from its entire 150,000-word filing cabinet. In this project, we implement a **[Finite State Machine](#13-resources)** that tracks exactly where we are in the JSON structure and actively intercepts the generation loop. 
+Normally, an LLM is free to pick whatever token it wants from its entire 150,000-word filing cabinet. In this project, we implement a **[Finite State Machine](#14-glossary)** that tracks exactly where we are in the JSON structure and actively intercepts the generation loop. 
 
 Here is the step-by-step algorithm executed for *every single token*:
 
