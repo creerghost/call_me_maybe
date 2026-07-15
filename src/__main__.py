@@ -19,12 +19,16 @@ def build_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--functions_definition", help="Path to functions definition json file"
+        "--functions_definition",
+        required=True,
+        help="Path to functions definition json file"
     )
-    parser.add_argument("--input", help="Path to function calling json file")
-    parser.add_argument("--output", help="Path to output file")
-    parser.add_argument("--llm_path", help="Path to LLM")
-    parser.add_argument("--llm_name", help="Name of LLM model (name of class)")
+    parser.add_argument("--input", required=True,
+                        help="Path to function calling json file")
+    parser.add_argument("--output", required=True, help="Path to output file")
+    parser.add_argument("--llm_path", required=True, help="Path to LLM")
+    parser.add_argument("--llm_name", required=True,
+                        help="Name of LLM model (name of class)")
     parser.add_argument(
         "--visual",
         action="store_true",
