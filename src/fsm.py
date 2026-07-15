@@ -1,6 +1,8 @@
 from enum import Enum, auto
-from typing import Any
-from .models import SchemaNode
+from typing import Any, TYPE_CHECKING
+# avoiding circular import (models -> fsm -> models)
+if TYPE_CHECKING:
+    from .models import SchemaNode
 
 
 class JSONState(Enum):
@@ -21,6 +23,8 @@ class JSONStateMachine:
         val_type = val_schema.type if val_schema else "string"
 
         if val_type == "object":
+            # circular import prevention
+            from .models import SchemaNode
             new_node = SchemaNode(
                 type="object",
                 properties=val_schema.properties or {},
@@ -32,6 +36,7 @@ class JSONStateMachine:
             stack.append(new_node)
             return S.EXPECT_OBJECT_START, ""
         elif val_type == "array":
+            from .models import SchemaNode
             new_node = SchemaNode(
                 type="array",
                 items=val_schema.items

@@ -10,6 +10,7 @@ from .loader import Loader
 from .models import FunctionCallResult, TestPrompt
 from .output import OutputWriter
 from .prompt import PromptConstructor
+from .visualizer import Visualizer
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,8 +50,16 @@ def generate_result(decoder: ConstrainedDecoder,
         FunctionCallResult: A parsed, validated Pydantic model of the output.
     """
     prompt = PromptConstructor.build_prompt(loader.fn_defs, test_prompt.prompt)
-    generated_text = decoder.generate(prompt, test_prompt.prompt,
-                                      loader.fn_defs, visualize)
+    
+    visualizer = Visualizer(decoder.llm.id2token) if visualize else None
+    
+    generated_tokens = []
+    for event in decoder.generate(prompt, test_prompt.prompt, loader.fn_defs):
+        if visualizer:
+            visualizer.render(event)
+        generated_tokens.append(event.next_token_id)
+        
+    generated_text = decoder.llm.model.decode(generated_tokens)
     loads = json.loads(generated_text)
 
     return FunctionCallResult(

@@ -85,6 +85,9 @@ class LLM():
             # Manually wrap the text in Qwen's ChatML special tokens
             # 151644 = <|im_start|>, 151645 = <|im_end|>
             # 872 = "user", 198 = "\n", 77091 = "assistant"
+
+            # for different modules it's whatever but in this project
+            # I will not handle this, it's quite complicated
             prompt_ids = self.custom_tokenizer.encode(text)
             return [151644, 872, 198] + prompt_ids + [151645, 198, 151644, 77091, 198]
         tokenizer = self.model._tokenizer

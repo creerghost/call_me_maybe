@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pydantic import BaseModel, ValidationError, model_validator, ConfigDict
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, Optional
+from .fsm import JSONState
 import pytest
 
 
@@ -87,6 +88,21 @@ class SchemaNode(BaseModel):
         else:
             val_schema = self.items
         return val_schema.type if val_schema else "string"
+
+
+class GenerationEvent(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    user_question: str
+    input_ids: list[int]
+    state: JSONState
+    old_state: JSONState
+    fast_forwarded: bool
+    valid_ids: list[int]
+    token_str: str
+    next_token_id: int
+    full_json_string: str
+    context: dict[str, Any]
+    logits: Optional[list[float]] = None
 
     # === TESTS == FUNCTION PARAMETER ===
 

@@ -2,23 +2,22 @@
 
 # Call Me Maybe: A Deep Dive into Constrained Decoding
 
-## WARNING
-Information is outdated. Will be changed later
-
 ## Table of Contents
 1. [Description](#1-description)
 2. [Introduction to AI & LLMs](#2-introduction-to-ai--llms)
 3. [Tokenization: The LLM Alphabet](#3-tokenization-the-llm-alphabet)
 4. [Logits: The Prediction Scoreboard](#4-logits-the-prediction-scoreboard)
 5. [Algorithm explanation](#5-algorithm-explanation)
-6. [Pipeline example](#6-pipeline-example)
-7. [Instructions](#7-instructions)
-8. [Example usage](#8-example-usage)
-9. [Design decisions](#9-design-decisions)
-10. [Performance analysis](#10-performance-analysis)
-11. [Challenges faced](#11-challenges-faced)
-12. [Testing strategy](#12-testing-strategy)
-13. [Resources](#13-resources)
+6. [Custom BPE Tokenizer Implementation](#6-custom-bpe-tokenizer-implementation)
+7. [Pipeline example](#7-pipeline-example)
+8. [Instructions](#8-instructions)
+9. [Example usage](#9-example-usage)
+10. [Design decisions](#10-design-decisions)
+11. [Performance analysis](#11-performance-analysis)
+12. [Challenges faced](#12-challenges-faced)
+13. [Testing strategy](#13-testing-strategy)
+14. [Glossary](#14-glossary)
+15. [Resources](#15-resources)
 
 ---
 
@@ -35,9 +34,10 @@ While massive models like GPT-4 can reliably output JSON through sheer parameter
 - **Dynamic Chat Templates:** Automatically formats raw prompts into the model's native conversational template for higher accuracy.
 
 ### Bonus Features Implemented:
-- **CLI Visualization Dashboard:** Added a `--visual` flag to render a real-time, colorful dashboard in the terminal that displays the active state, token masking, and live generation.
+- **CLI Visualization Dashboard:** Added a `--visual` flag to render a real-time, colorful dashboard tracking Tokens Per Second (TPS), live JSON path contexts, and Numpy-powered Top-K alternative token probabilities.
+- **Custom BPE Tokenizer:** A from-scratch, pure Python `regex` Byte-Pair Encoding tokenizer (enabled via `--tokenizer`) mapping raw bytes to unicode for strict vocabulary alignment without depending on HuggingFace tokenizers.
 - **Multiple Model Support:** The engine dynamically supports loading any HuggingFace causal language model via the `--model` CLI flag (e.g., `microsoft/Phi-3-mini-4k-instruct` or `TinyLlama/TinyLlama-1.1B-Chat-v1.0`).
-- **Performance Optimizations:** Implemented LRU memoization for token masks and a "fast-forward" generation skip for deterministic tokens to dramatically boost Tokens Per Second (TPS).
+- **Performance Optimizations:** Implemented LRU memoization for token masks, a "fast-forward" generation skip for deterministic tokens, and utilized `numpy` arrays and PyTorch tensors for vectorized logit masking to avoid slow native Python loops, drastically boosting Tokens Per Second (TPS).
 - **Advanced Error Recovery:** Implemented state-bound max-length constraints and dynamic logit boosting to prevent small LLMs from falling into infinite generation loops when trapped in string-generation states.
 - **Comprehensive Test Suite:** Developed a robust `pytest` suite validating schema parsing, Pydantic bounds, and the constrained decoder's edge cases.
 
@@ -108,7 +108,24 @@ By strictly controlling the logit probabilities at runtime, this algorithm mathe
 
 
 
-## 6. Pipeline example
+## 6. Custom BPE Tokenizer Implementation
+
+To run the model independently of HuggingFace libraries, I built a **Byte-Pair Encoding (BPE)** tokenizer completely from scratch. The tokenizer is located in `src/tokenizer.py`.
+
+### How BPE Works
+BPE is a data compression technique adapted for Natural Language Processing. Instead of treating every word as a separate token, it iteratively merges the most frequently occurring pairs of characters (or bytes) into single tokens.
+
+### Implementation Details
+1. **Bytes-to-Unicode Mapping:** LLMs process raw UTF-8 bytes, not formatted text. Raw bytes contain invisible control characters that can break JSON encoding. To solve this, the tokenizer first maps all 256 raw bytes to visible unicode characters (e.g., a space ` ` becomes `Ġ`). This replicates the exact behavior of the GPT-2 and Qwen tokenizers.
+2. **Regex Splitting:** Before merging, the raw text is split into isolated words, punctuation, and spaces using a precise Regular Expression (`r"'s|'t|'re|..."`). This guarantees that BPE never merges the end of one word with the beginning of the next word.
+3. **Iterative Merging:** The tokenizer loads a `merges.txt` file which contains a ranked list of character pairs. For each word, it finds adjacent character pairs and merges the pair that has the highest priority (lowest rank). It repeats this recursively until no more pairs can be merged.
+4. **Vocabulary Mapping:** Finally, the fully merged string fragments (tokens) are mapped to their unique Integer IDs using the `vocab.json` dictionary.
+
+This entire process runs efficiently via `numpy` arrays to prevent excessive Python string-concatenation overhead, achieving fast and deterministic tokenization!
+
+---
+
+## 7. Pipeline example
 
 To understand how Call Me Maybe processes a request, let's walk through the pipeline step-by-step.
 
@@ -130,8 +147,8 @@ It also receives a user prompt: *"What is the sum of 265 and 345?"*
 **2. Prompt Building:**
 The `PromptConstructor` formats this into a strict, readable text block (often using the model's native Chat Template like `<|user|>`) to give the LLM the exact context of the functions and the user's request.
 
-**3. Token Generation & Constraint Checking (The Magic):**
-The LLM begins predicting the output one token at a time. 
+**3. Token Generation & Constraint Checking:**
+The LLM is an "autoregressive" model, meaning it cannot generate an entire response at once. It must mathematically predict the output strictly one token (word or chunk of a word) at a time. For every single token it generates, it recalculates the massive logit scoreboard. Our decoder continuously intercepts this loop: 
 - The decoder state machine is initialized at `OBJECT_START`.
 - Before the LLM can say "Sure, here is the answer", the decoder steps in, blocks all conversational words in the filing cabinet, and forces the LLM to output `{`.
 - Next, the state shifts to `KEY_NAME`. The decoder blocks everything except quotes and letters, forcing `"name":`.
@@ -152,7 +169,7 @@ The generated tokens are concatenated and parsed. Because the state machine math
 
 ---
 
-## 7. Instructions
+## 8. Instructions
 
 ### Prerequisites
 - Python 3.10+
@@ -168,7 +185,7 @@ make install
 
 ---
 
-## 8. Example usage
+## 9. Example usage
 
 To run the standard evaluation pipeline using the default model (Qwen 0.6B):
 ```bash
@@ -178,6 +195,11 @@ make run
 To run the pipeline with the **live visualizer dashboard**:
 ```bash
 make run-visual
+```
+
+To run full visualization using the **custom BPE tokenizer**:
+```bash
+make run-full
 ```
 
 ### Using Custom Models
@@ -192,9 +214,36 @@ make run-custom-visual MODEL_PATH=microsoft/Phi-3-mini-4k-instruct
 
 *Note: You may encounter out-of-memory errors on smaller machines if you attempt to load models larger than 2B parameters without quantization.*
 
+### Understanding the Live Visualization Dashboard
+When running with `--visual`, the terminal will display a real-time dashboard. Here is a breakdown of what each metric means:
+
+```text
+=== Constrained JSON Decoder ===
+
+User Prompt: What is the sum of 2 and 3?
+Encoded Prompt (449 tokens): [151644, 872, 198, 2610, 525, 264, 729, 1786, 16740, 17847]...
+
+Current State: EXPECT_VALUE (was EXPECT_COLON)
+Context Path: name (enum)
+Speed: 1.3 tokens/sec
+
+Allowed Tokens: 2
+Top Alternatives: ' :' (100.0%) | ':' (0.0%)
+
+Generated Token: ' :' (ID: 549)
+
+ { "name" :
+```
+- **Encoded Prompt:** Displays the raw Integer IDs generated by the tokenizer for the input prompt, proving that the LLM only sees numbers.
+- **Current State:** The active step in the Finite State Machine (e.g., currently expecting a JSON value, previously parsed a colon).
+- **Context Path:** Dynamically infers your exact position within the provided JSON schema (e.g., currently generating the `name` field, which is constrained as an `enum`).
+- **Speed:** Live tracking of Tokens Per Second (TPS), which is a key performance metric for the decoder.
+- **Allowed Tokens:** The exact number of tokens in the 150k vocabulary that mathematically satisfy the JSON schema and current state.
+- **Top Alternatives:** Utilizes `numpy` softmax probability analysis to display the top 3 alternative tokens the LLM considered from the *Allowed Tokens* pool, and its confidence percentages for each.
+
 ---
 
-## 9. Design decisions
+## 10. Design decisions
 
 1. **State Machine Architecture:** I chose a modular state machine (`JSONState` Enum) to track the decoding process. This makes the code highly extensible. If we want to add support for arrays or nested objects in the future, we simply add new states (e.g., `ARRAY_START`) rather than rewriting a monolithic parsing loop.
 2. **LRU Caching for Token Masks:** Computing valid tokens by iterating over a 150k vocabulary on every single generation step is incredibly slow. I utilized Python's `@lru_cache` to memoize the valid token sets for static states (like expecting a `:` or `{`). This drastically improved tokens-per-second (TPS).
@@ -203,12 +252,13 @@ make run-custom-visual MODEL_PATH=microsoft/Phi-3-mini-4k-instruct
 
 ---
 
-## 10. Performance analysis
+## 11. Performance analysis
 
 ### Tokens Per Second (TPS)
 The primary bottleneck in autoregressive generation is the LLM's forward pass. However, constrained decoding adds overhead because we must filter a massive logits array on the CPU.
 - **Without caching:** The token filtering added ~150ms of overhead per generation step, reducing generation to ~4 TPS.
-- **With LRU caching & Fast-Forwarding:** The overhead was reduced to <5ms for cached states. Because deterministic characters (`{`, `"`, `:`, `,`, `}`) skip the LLM entirely, effective TPS increased to **~15-20 TPS** on standard hardware, meaning the decoding constraint is nearly cost-free.
+- **With Caching & Vectorized Masking:** To avoid crippling performance with native Python loops, I utilized `numpy` arrays in the BPE tokenizer and PyTorch tensors in the decoder. By applying vectorized operations to mask invalid tokens with `-inf` and leveraging `@lru_cache` for static states, the overhead was reduced to <5ms.
+- **Fast-Forwarding:** Because deterministic characters (`{`, `"`, `:`, `,`, `}`) skip the LLM entirely, effective TPS increased to **~15-20 TPS** on standard hardware, meaning the decoding constraint is nearly cost-free.
 
 ### Accuracy
 Tested against `Qwen/Qwen2.5-0.5B` and `TinyLlama-1.1B`:
@@ -218,7 +268,7 @@ Tested against `Qwen/Qwen2.5-0.5B` and `TinyLlama-1.1B`:
 
 ---
 
-## 11. Challenges faced
+## 12. Challenges faced
 
 1. **The Multi-Token String Problem:** 
    When generating strings, models don't generate character-by-character. A token might represent a whole word, a fragment with a leading space (e.g., `Ġhello`), or a special symbol. The decoder had to intelligently allow these multi-character tokens without breaking the `PARAM_VALUE` state. If the engine blindly checked characters one-by-one against a schema, it would crash when the LLM tried to spit out a 5-character token. I had to implement a robust prefix-matching algorithm for the vocabulary filter.
@@ -270,9 +320,24 @@ Tested against `Qwen/Qwen2.5-0.5B` and `TinyLlama-1.1B`:
          logits[q_id] += 5.0
      ```
 
+6. **Replicating the Tokenizer Byte-to-Unicode Mapping:**
+   Building the custom Byte-Pair Encoding (BPE) tokenizer from scratch exposed edge cases with handling whitespaces and special characters. I had to manually implement a bytes-to-unicode character mapping dictionary to properly translate utf-8 string bytes into the exact readable tokens the LLM expected (replicating GPT-2/Qwen behaviors), effectively resolving critical spacing mismatches.
+
+7. **ChatML Instruction Hallucinations:**
+   Initially, the constrained LLM failed simple logic tests (e.g., hallucinating random numbers like `265` and `345` instead of answering "What is the sum of 2 and 3?"). I discovered that raw text prompt injection completely bypassed the model's instruction tuning. This was resolved by modifying `src/llm.py` to manually wrap inputs in strict Qwen ChatML tags (`<|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\n`), instantly restoring logic and alignment.
+
+8. **Pydantic Strict Validation Hurdles:**
+   Aggressive schema validation was required. During pipeline execution, malformed inputs triggered silent errors if not caught early. I implemented `@model_validator(mode='after')` decorators on Pydantic `FunctionDefinition` models to aggressively strip and reject empty strings, ensuring the FSM was never fed broken parameter keys.
+
+9. **Circular Import Crashes (FSM & Models):**
+   I experienced a hard crash (`ImportError: cannot import name 'SchemaNode' from partially initialized module`) because `fsm.py` and `models.py` were mutually importing each other. I bypassed this by utilizing Python's `typing.TYPE_CHECKING` at the module level for static analysis, and deferring the actual dynamic import of `SchemaNode` into the local function scopes inside the state machine.
+
+10. **Decoupling the Visualizer via Generators:**
+    Early iterations of the `ConstrainedDecoder` were tightly coupled with terminal `print` statements, making the logic difficult to test and inflexible. I executed a complete architectural refactor, transitioning the decoder into a pure Python generator that simply `yield`s Pydantic `GenerationEvent`s. This allowed me to build a completely detached `Visualizer` class that calculates TPS and Numpy-based softmax probabilities without polluting the core decoding pipeline.
+
 ---
 
-## 12. Testing strategy
+## 13. Testing strategy
 
 The project utilizes `pytest` for robust unit testing:
 - **Model Validation Tests:** Ensures Pydantic models correctly reject empty strings, invalid types, and malformed dictionaries.
@@ -283,11 +348,33 @@ To run the test suite:
 ```bash
 make test
 ```
-*(If a test target is added to the Makefile, it will execute `pytest src/models.py`).*
 
 ---
 
-## 13. Resources
+## 14. Glossary
+
+- **Autoregressive Generation:** The process where a model generates an output sequence strictly one step at a time, using its previously generated outputs as context for the next prediction.
+- **BPE (Byte-Pair Encoding):** A data compression algorithm used to split text into tokens by iteratively merging the most frequent pairs of bytes or characters.
+- **Chat Template (e.g., ChatML):** The specific formatting syntax (like `<|im_start|>user\n...`) required by an instruction-tuned LLM to understand who is speaking in a prompt.
+- **Constrained Decoding:** Forcing an LLM to generate text that strictly adheres to a predefined format (like JSON) by mathematically blocking invalid tokens at runtime.
+- **Decoding:** The process of translating the raw Integer IDs (tokens) generated by the AI back into readable human text.
+- **Encoding:** The process of translating readable human text into an array of Integer IDs (tokens) so the AI can process it mathematically.
+- **FSM (Finite State Machine):** An abstract machine that tracks the exact current state of the JSON generation (e.g., `EXPECT_COLON`, `EXPECT_VALUE`) and dictates which transitions are legally allowed next.
+- **Function Calling:** Giving an AI the ability to output a structured command (like a JSON object) that triggers a real-world tool (like fetching the weather or turning on a light) instead of just chatting back.
+- **JSON (JavaScript Object Notation):** A strict, standard format for organizing data so that computers can easily read it. It uses braces `{}` and quotes `""` to store information like a digital filing cabinet.
+- **LLM (Large Language Model):** A massive neural network trained to predict the next word in a sequence based on vast amounts of text data.
+- **Logits:** The raw, unnormalized mathematical compatibility scores generated by the LLM for every token in its vocabulary. Higher logits indicate a higher probability that the token should come next.
+- **Memoization:** A performance optimization technique that caches the results of expensive function calls (like filtering a 150k vocabulary) so they can be instantly retrieved later.
+- **Model:** A massive math file containing patterns an AI learned from reading the internet. When we "run a model," we are just doing math on those patterns to guess what words should come next.
+- **Parameters:** The "knowledge" neurons in an AI model. A 1-Billion parameter model has 1 billion adjustable mathematical dials that dictate how it guesses words.
+- **Prompt:** The text, question, or instruction that a human types into an AI.
+- **Token:** The fundamental unit of text processed by an LLM. A token can be a full word, a syllable, or a single character.
+- **TPS (Tokens Per Second):** The standard metric for measuring the generation speed of a language model.
+- **Vocabulary:** The predefined, static dictionary of all possible tokens (often 30k to 150k) that a specific LLM knows and can generate.
+
+---
+
+## 15. Resources
 
 ### References
 - [HuggingFace Tokenizer Summary](https://huggingface.co/docs/transformers/tokenizer_summary)
@@ -296,10 +383,12 @@ make test
 - [LLM Visualization](https://bbycroft.net/llm)
 - [Outlines Paper (Concept Reference)](https://arxiv.org/abs/2307.09702)
 - [Finite State Machines](https://medium.com/@brijeshrn/beyond-free-form-text-how-constrained-decoding-is-reshaping-structured-generation-in-llms-5f7a38bef259)
+- [Byte-Pair Encoding implementation](https://www.geeksforgeeks.org/nlp/byte-pair-encoding-bpe-in-nlp/)
 
 ### AI Usage Disclosure
-This project was developed with the assistance of advanced AI coding agents (specifically Antigravity, utilizing Gemini models). 
-- **Architectural Planning:** AI was used to brainstorm the state machine transitions and identify edge cases in token mapping.
-- **Debugging:** AI agents identified the root cause of the `KeyError: 'type'` within the Phi-3 configuration and patched the `llm_sdk` module dynamically.
-- **Code Generation:** Portions of the boilerplate, Pydantic models, and documentation were written collaboratively through pair-programming sessions with the AI.
-- **Conceptualizing:** The AI helped break down the complex mathematics of logits and vocabulary filtering into understandable, implementable algorithms.
+This project was developed with the assistance of an AI utilizing Gemini models acting as a sounding board and debugger.
+- **Architectural Refactoring & Conceptualizing:** While the core concepts like Python generators were already understood, the AI acted as a sounding board to help conceptualize the best way to utilize event-streaming architectures to cleanly decouple the terminal visualizer from the core decoding FSM.
+- **Advanced Implementations:** The AI provided breakdowns of how Byte-Pair Encoding operates under the hood (including bytes-to-unicode mappings and strict regex token isolation), which helped heavily in implementing the custom BPE tokenizer from scratch without HuggingFace dependencies.
+- **Debugging & Resolution:** When dealing with deep architectural crashes like circular imports between `models.py` and `fsm.py`, the AI suggested debugging theories and explained how to properly utilize Python's `typing.TYPE_CHECKING` for static analysis. It also helped debug a tricky `KeyError: 'type'` within the Phi-3 config by explaining how to do runtime dictionary patching.
+- **Documentation:** The AI assisted in structuring and formatting the project documentation (including organizing this README) and drafting docstrings, accelerating the documentation process through collaborative pair-programming rather than blindly generating code.
+- **Mathematics:** The AI was utilized as a tutor to break down complex mathematical concepts like logit manipulation, vocabulary filtering, and Numpy Top-K Softmax probability visualization so they could be confidently implemented in the engine.

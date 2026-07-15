@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Any, Generator
 from .llm import LLM
-from .models import FunctionDefinition, SchemaNode, FunctionParameter
+from .models import FunctionDefinition, SchemaNode, FunctionParameter, GenerationEvent
 from .fsm import JSONState, JSONStateMachine
 from .masker import TokenMasker
 # ONLY for performace optimization: working with tensors to not have big loops
@@ -18,8 +18,7 @@ class ConstrainedDecoder:
             self.masker.quote_ids, dtype=torch.long)
 
     def generate(self, prompt: str, user_question: str,
-                 func_defs: list[FunctionDefinition],
-                 visualize: bool = False) -> Any | str:
+                 func_defs: list[FunctionDefinition]) -> Generator[GenerationEvent, None, None]:
         input_ids = self.llm.encode(prompt)
 
         state = JSONState.EXPECT_OBJECT_START
@@ -59,13 +58,14 @@ class ConstrainedDecoder:
 
             if len(valid_ids) == 1:
                 next_token_id, token_str = self._fast_forward_token(
-                    valid_ids, state, visualize
+                    valid_ids, state
                 )
                 fast_forwarded = True
+                logits_out = None
             else:
-                next_token_id, token_str = self._generate_token_with_llm(
-                    input_ids, generated_tokens, valid_ids,
-                    state, context, state_token_count, visualize
+                next_token_id, token_str, logits_out = self._generate_token_with_llm(
+                    input_ids, generated_tokens, valid_ids, state, context,
+                    state_token_count
                 )
                 fast_forwarded = False
 
@@ -81,16 +81,22 @@ class ConstrainedDecoder:
             state_token_count += 1
             if old_state != state:
                 state_token_count = 0
-
-            self._print_status(
-                visualize, user_question, state, old_state,
-                fast_forwarded, valid_ids, token_str, full_json_string
+            yield GenerationEvent(
+                user_question=user_question,
+                input_ids=input_ids,
+                state=state,
+                old_state=old_state,
+                fast_forwarded=fast_forwarded,
+                valid_ids=valid_ids,
+                token_str=token_str,
+                next_token_id=next_token_id,
+                full_json_string=full_json_string,
+                context=context,
+                logits=logits_out
             )
 
             if len(generated_tokens) > 200:
                 break
-
-        return self.llm.model.decode(generated_tokens)
 
     def _handle_error_recovery(self, state: JSONState, context: dict[str, Any],
                                state_token_count: int,
@@ -105,8 +111,7 @@ class ConstrainedDecoder:
                 return self.masker.quote_ids
         return valid_ids
 
-    def _fast_forward_token(self, valid_ids: list[int], state: JSONState,
-                            visualize: bool) -> tuple[int, str]:
+    def _fast_forward_token(self, valid_ids: list[int], state: JSONState) -> tuple[int, str]:
         next_token_id = valid_ids[0]
         token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
         return next_token_id, token_str
@@ -115,8 +120,7 @@ class ConstrainedDecoder:
                                  generated_tokens: list[int],
                                  valid_ids: list[int], state: JSONState,
                                  context: dict[str, Any],
-                                 state_token_count: int,
-                                 visualize: bool) -> tuple[int, str]:
+                                 state_token_count: int) -> tuple[int, str, list[float]]:
         logits = self.llm.get_logits(input_ids + generated_tokens)
 
         logits_t = torch.tensor(logits, dtype=torch.float32)
@@ -144,39 +148,4 @@ class ConstrainedDecoder:
         next_token_id = int(torch.argmax(mask).item())
         token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
 
-        return next_token_id, token_str
-
-    def _print_status(self, visualize: bool, user_question: str,
-                      state: JSONState, old_state: JSONState,
-                      fast_forwarded: bool, valid_ids: list[int],
-                      token_str: str, full_json_string: str) -> None:
-        if visualize:
-            self._render_dashboard(user_question, state, old_state,
-                                   fast_forwarded, valid_ids, token_str,
-                                   full_json_string)
-
-    def _render_dashboard(self, user_question: str, state: JSONState,
-                          old_state: JSONState, fast_forwarded: bool,
-                          valid_ids: list[int], token_str: str,
-                          full_json_string: str) -> None:
-        dashboard = "\033[2J\033[H"  # clear screen & cursor home
-        dashboard += ("\033[96m=== Constrained JSON Decoder "
-                      "===\033[0m\n\n")
-        dashboard += f"\033[93mUser Prompt:\033[0m {user_question}\n\n"
-        dashboard += (f"\033[92mCurrent State:\033[0m {state.name} "
-                      f"(was {old_state.name})\n")
-
-        if fast_forwarded:
-            dashboard += ("\033[94mAllowed Tokens:\033[0m 1 "
-                          "(Fast-Forwarding!)\n")
-        else:
-            dashboard += (f"\033[94mAllowed Tokens:\033[0m "
-                          f"{len(valid_ids)}\n")
-
-        dashboard += f"\033[95mGenerated Token:\033[0m '{token_str}'\n\n"
-
-        colored_json = full_json_string.replace('"', '\033[36m"\033[0m')
-        colored_json = colored_json.replace(':', '\033[33m:\033[0m')
-        dashboard += f"{colored_json}\n"
-
-        print(dashboard, end="", flush=True)
+        return next_token_id, token_str, logits
