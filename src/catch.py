@@ -33,11 +33,7 @@ def catch(fn: Callable[..., Any]) -> Callable[..., Any]:
             *args: Positional arguments for the wrapped function.
             **kwargs: Keyword arguments for the wrapped function.
 
-        Raises:
-            LoaderError: If any generic exception is thrown by the
-                wrapped function.
-            PromptConstructionError: If any exception is thrown while
-                building prompts.
+        Raises any (im)possible error.
 
         Returns:
             Any: The original return value of the wrapped function.
