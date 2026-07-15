@@ -14,7 +14,9 @@ class JSONState(Enum):
 
 
 class JSONStateMachine:
-    def _transition_to_value(self, val_schema: Any, stack: list[SchemaNode]) -> tuple[JSONState, str]:
+    def _transition_to_value(
+            self, val_schema: Any, stack: list[SchemaNode]
+    ) -> tuple[JSONState, str]:
         S = JSONState
         val_type = val_schema.type if val_schema else "string"
 
@@ -46,7 +48,7 @@ class JSONStateMachine:
         # and what keys we are still waiting for
         S = JSONState
         stack = context['stack']
-        current_node = stack[-1] if stack else None
+        current_node: Any = stack[-1] if stack else None
 
         prefix_strip = current_prefix.strip()
 
@@ -57,7 +59,8 @@ class JSONStateMachine:
 
         elif state == S.EXPECT_ARRAY_START:
             if prefix_strip == "[":
-                return self._transition_to_value(current_node.items if current_node else None, stack)
+                return self._transition_to_value(
+                    current_node.items if current_node else None, stack)
 
         # checking if the token matches with remaining keys
         # if it does, save it and remove from remaining keys
@@ -80,7 +83,7 @@ class JSONStateMachine:
                 if val_schema is None:
                     val_schema = current_node.properties.get(
                         context['current_key'].strip('"'))
-                
+
                 return self._transition_to_value(val_schema, stack)
 
         elif state == S.EXPECT_VALUE:

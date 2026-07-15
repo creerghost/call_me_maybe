@@ -87,7 +87,7 @@ class TokenMasker:
         stack = context['stack']
         if not stack:
             return []
-        
+
         current_node = stack[-1]
         options = []
         if current_node.type == "object":
@@ -97,10 +97,10 @@ class TokenMasker:
                 options.append(",")
         else:
             options.append("]")
-            # For array, we could check if items are bounded, 
+            # For array, we could check if items are bounded,
             # but usually they are open-ended list of items.
             options.append(",")
-            
+
         return self._get_tokens_for_options(options, current_prefix)
 
     @lru_cache(maxsize=1024)
