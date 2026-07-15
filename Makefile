@@ -33,6 +33,9 @@ install:
 run: install
 	$(PYTHON) -m src $(ARGS)
 
+run-full: install
+	$(PYTHON) -m src $(ARGS) --visual --tokenizer
+
 run-visual: install
 	$(PYTHON) -m src $(ARGS) --visual
 

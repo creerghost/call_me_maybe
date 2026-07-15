@@ -5,7 +5,8 @@ import numpy as np
 
 class LLM():
     def __init__(self, llm_path: str, llm_name: str,
-                 hf_model: str | None = None) -> None:
+                 hf_model: str | None = None,
+                 tokenizer: bool = False) -> None:
         """Initializes the LLM wrapper and loads the model and vocabulary.
 
         Args:
@@ -18,8 +19,14 @@ class LLM():
         self.llm_path = llm_path
         self.llm_name = llm_name
         self.hf_model = hf_model
+        self.use_tokenizer = tokenizer
         self._init_llm()
         self._load_vocab()
+        if self.use_tokenizer:
+            from .tokenizer import BPETokenizer
+            self.custom_tokenizer = BPETokenizer(
+                self.model.get_path_to_vocab_file(),
+                self.model.get_path_to_merges_file())
 
     def _init_llm(self) -> None:
         """Dynamically imports and instantiates the language model class."""
@@ -74,6 +81,12 @@ class LLM():
         Returns:
             list[int] | Any: A flat list of integer token IDs.
         """
+        if self.use_tokenizer:
+            # Manually wrap the text in Qwen's ChatML special tokens
+            # 151644 = <|im_start|>, 151645 = <|im_end|>
+            # 872 = "user", 198 = "\n", 77091 = "assistant"
+            prompt_ids = self.custom_tokenizer.encode(text)
+            return [151644, 872, 198] + prompt_ids + [151645, 198, 151644, 77091, 198]
         tokenizer = self.model._tokenizer
         if hasattr(tokenizer, "chat_template") and tokenizer.chat_template:
             messages = [{"role": "user", "content": text}]
