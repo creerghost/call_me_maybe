@@ -1,14 +1,12 @@
-from pydantic import ValidationError
-from .models import FunctionDefinition, FunctionParameter
+from .models import FunctionDefinition
 from .catch import PromptConstructionError
-from typing import Any
-import pytest
 
 
-class PromptConstructor():
+class PromptConstructor:
     @staticmethod
-    def build_prompt(functions: list[FunctionDefinition],
-                     user_prompt: str) -> str:
+    def build_prompt(
+        functions: list[FunctionDefinition], user_prompt: str
+    ) -> str:
         """Constructs a system prompt instructing the LLM to output JSON.
 
         Args:
@@ -49,9 +47,5 @@ class PromptConstructor():
         user_request_block = f"User request: \n{user_prompt.strip()}"
 
         return (
-            f"{instruction_block}\n\n"
-            f"{functions_block}\n\n"
-            f"{user_request_block}"
+            f"{instruction_block}\n\n{functions_block}\n\n{user_request_block}"
         )
-
-

@@ -205,11 +205,16 @@ make run-full
 ### Using Custom Models
 The engine supports dynamic loading of other HuggingFace models. You can specify a custom model path via the Makefile:
 ```bash
-make run-custom MODEL_PATH=microsoft/Phi-3-mini-4k-instruct
+make run-custom
 ```
 Or with the visualizer:
 ```bash
-make run-custom-visual MODEL_PATH=microsoft/Phi-3-mini-4k-instruct
+make run-custom-visual
+```
+
+Or with the visualizer using **custom BPE tokenizer**:
+```bash
+make run-custom-all
 ```
 
 *Note: You may encounter out-of-memory errors on smaller machines if you attempt to load models larger than 2B parameters without quantization.*

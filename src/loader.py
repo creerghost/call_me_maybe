@@ -1,13 +1,10 @@
-import pytest
 import json
-from pathlib import Path
 from pydantic import ValidationError
 from .models import FunctionDefinition, TestPrompt
 from .catch import LoaderError
-import os
 
 
-class Loader():
+class Loader:
     def __init__(self, fdef_name: str, fcall_name: str) -> None:
         """Initializes the Loader and parses the configuration files.
 
@@ -56,4 +53,3 @@ class Loader():
             raise LoaderError(f"Invalid JSON in {fcall}: {e}")
         except ValidationError as e:
             raise LoaderError(f"Schema mismatch in {fcall}:\n{e}")
-

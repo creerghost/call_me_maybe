@@ -1,13 +1,13 @@
-import pytest
 import json
 from pathlib import Path
 from .models import FunctionCallResult
 
 
-class OutputWriter():
+class OutputWriter:
     @staticmethod
-    def write_output(results: list[FunctionCallResult],
-                     output_path: str) -> None:
+    def write_output(
+        results: list[FunctionCallResult], output_path: str
+    ) -> None:
         """Saves a list of FunctionCallResults to a JSON file.
 
         Args:
@@ -26,5 +26,3 @@ class OutputWriter():
 
         with output_path_obj.open("w", encoding="utf-8") as file_handle:
             json.dump(tmp, file_handle, indent=2, ensure_ascii=False)
-
-

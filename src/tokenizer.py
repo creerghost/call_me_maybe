@@ -22,10 +22,9 @@ class BPETokenizer:
 
         with open(vocab_file, "r", encoding="utf-8") as f:
             self.vocab: dict[str, int] = json.load(f)
-        self.vocab_rev: dict[int, str] = {
-            v: k for k, v in self.vocab.items()}
+        self.vocab_rev: dict[int, str] = {v: k for k, v in self.vocab.items()}
         with open(merges_file, "r", encoding="utf-8") as f:
-            bpe_data = f.read().split('\n')
+            bpe_data = f.read().split("\n")
             if bpe_data and bpe_data[0].startswith("#version"):
                 bpe_data = bpe_data[1:]
             self.bpe_ranks: dict[tuple[str, str], int] = {}
@@ -37,13 +36,15 @@ class BPETokenizer:
                     self.bpe_ranks[(parts[0], parts[1])] = rank
         self.byte_encoder: dict[int, str] = self.bytes_to_unicode()
         self.byte_decoder: dict[str, int] = {
-            v: k for k, v in self.byte_encoder.items()}
+            v: k for k, v in self.byte_encoder.items()
+        }
         self.cache: dict[str, str] = {}
         # self.pat splits raw text into a list of words, spaces and punctuation
         # ensures that BPE doesn't merge the end of one word with the beggining
         # of the next word
         self.pat = re.compile(
-            r"""'s|'t|'re|'ve|'m|'ll|'d| ?\w+| ?[^\s\w]+|\s+(?!\S)|\s+""")
+            r"""'s|'t|'re|'ve|'m|'ll|'d| ?\w+| ?[^\s\w]+|\s+(?!\S)|\s+"""
+        )
 
     @staticmethod
     def bytes_to_unicode() -> dict[int, str]:
@@ -53,9 +54,11 @@ class BPETokenizer:
         Function maps all 256 raw bytes to visible characters.
         (this is why space byte convers into weird G)
         """
-        bytes = list(range(ord("!"), ord("~") + 1)) + \
-            list(range(ord("¡"), ord("¬") + 1)) + \
-            list(range(ord("®"), ord("ÿ") + 1))
+        bytes = (
+            list(range(ord("!"), ord("~") + 1))
+            + list(range(ord("¡"), ord("¬") + 1))
+            + list(range(ord("®"), ord("ÿ") + 1))
+        )
         chars = bytes[:]
         n = 0
         for b in range(2**8):
@@ -77,8 +80,9 @@ class BPETokenizer:
             # get all adjacent pairs
             pairs = list(zip(word[:-1], word[1:]))
             # find the pair with the lowest rank (highest prior)
-            best_pair = min(pairs, key=lambda p:
-                            self.bpe_ranks.get(p, float('inf')))
+            best_pair = min(
+                pairs, key=lambda p: self.bpe_ranks.get(p, float("inf"))
+            )
             # break if no merges can be made
             if best_pair not in self.bpe_ranks:
                 break
@@ -110,7 +114,8 @@ class BPETokenizer:
             # convert to utf-8 bytes, then map to our unicode chars
             # " hello" -> " Ghello"
             token = "".join(
-                self.byte_encoder[b] for b in token.encode("utf-8"))
+                self.byte_encoder[b] for b in token.encode("utf-8")
+            )
             # apply bpe, returns space separated strings of tokens
             bpe_str: str = self.bpe(token)
             for bpe_token in bpe_str.split(" "):
@@ -120,8 +125,7 @@ class BPETokenizer:
 
     def decode(self, tokens: list[int]) -> str:
         # look up the string for each id and join them into one
-        text = "".join(
-            [self.vocab_rev.get(token, "") for token in tokens])
+        text = "".join([self.vocab_rev.get(token, "") for token in tokens])
 
         bytes: list[int] = [self.byte_decoder[c] for c in text]
         byte_arr = bytearray(bytes)

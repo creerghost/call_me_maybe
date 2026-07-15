@@ -1,26 +1,33 @@
 from __future__ import annotations
-from pydantic import BaseModel, ValidationError, model_validator, ConfigDict
+from pydantic import BaseModel, model_validator, ConfigDict
 from typing import Any, Literal, Self, Optional
 from .fsm import JSONState
-import pytest
 
 
 class FunctionParameter(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    type: Literal["string", "number", "integer", "boolean", "bool",
-                  "object", "array", "enum"]
+    model_config = ConfigDict(extra="forbid")
+    type: Literal[
+        "string",
+        "number",
+        "integer",
+        "boolean",
+        "bool",
+        "object",
+        "array",
+        "enum",
+    ]
     properties: dict[str, FunctionParameter] | None = None
     items: FunctionParameter | None = None
 
 
 class FunctionDefinition(BaseModel):
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra="forbid")
     name: str
     description: str
     parameters: dict[str, FunctionParameter]
     returns: FunctionParameter
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def check_empty_strings(self) -> Self:
         """Validates that no critical strings are empty or just whitespace.
 
@@ -42,10 +49,10 @@ class FunctionDefinition(BaseModel):
 
 class TestPrompt(BaseModel):
     __test__ = False  # tells pytest to not treat it as a test
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra="forbid")
     prompt: str
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def check_empty_prompt(self) -> Self:
         """Validates that the test prompt is not empty or just whitespace.
 
@@ -61,15 +68,16 @@ class TestPrompt(BaseModel):
 
 
 class FunctionCallResult(BaseModel):
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra="forbid")
     prompt: str
     name: str
     parameters: dict[str, Any]
 
 
 class SchemaNode(BaseModel):
-    type: Literal["object", "array", "string", "number",
-                  "integer", "boolean", "enum"]
+    type: Literal[
+        "object", "array", "string", "number", "integer", "boolean", "enum"
+    ]
     options: list[str] | None = None  # for enums (like fn names)
     properties: dict[str, FunctionParameter] | None = None
     items: FunctionParameter | None = None
@@ -104,4 +112,3 @@ class GenerationEvent(BaseModel):
     full_json_string: str
     context: dict[str, Any]
     logits: Optional[list[float]] = None
-

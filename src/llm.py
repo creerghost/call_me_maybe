@@ -3,10 +3,14 @@ from typing import Any
 import numpy as np
 
 
-class LLM():
-    def __init__(self, llm_path: str, llm_name: str,
-                 hf_model: str | None = None,
-                 tokenizer: bool = False) -> None:
+class LLM:
+    def __init__(
+        self,
+        llm_path: str,
+        llm_name: str,
+        hf_model: str | None = None,
+        tokenizer: bool = False,
+    ) -> None:
         """Initializes the LLM wrapper and loads the model and vocabulary.
 
         Args:
@@ -24,9 +28,11 @@ class LLM():
         self._load_vocab()
         if self.use_tokenizer:
             from .tokenizer import BPETokenizer
+
             self.custom_tokenizer = BPETokenizer(
                 self.model.get_path_to_vocab_file(),
-                self.model.get_path_to_merges_file())
+                self.model.get_path_to_merges_file(),
+            )
 
     def _init_llm(self) -> None:
         """Dynamically imports and instantiates the language model class."""
@@ -41,8 +47,9 @@ class LLM():
         """Extracts the vocabulary mapping from the loaded model's
         tokenizer."""
         self.token2id: dict[str, int] = self.model._tokenizer.get_vocab()
-        self.id2token: dict[int, str] = {v: k
-                                         for k, v in self.token2id.items()}
+        self.id2token: dict[int, str] = {
+            v: k for k, v in self.token2id.items()
+        }
         # sorting by id to ensure stable and deterministic ordering
         sorted_items = sorted(self.token2id.items(), key=lambda x: x[1])
         # replace weird G with space to save time in the decoder loop
@@ -89,7 +96,11 @@ class LLM():
             # for different modules it's whatever but in this project
             # I will not handle this, it's quite complicated
             prompt_ids = self.custom_tokenizer.encode(text)
-            return [151644, 872, 198] + prompt_ids + [151645, 198, 151644, 77091, 198]
+            return (
+                [151644, 872, 198]
+                + prompt_ids
+                + [151645, 198, 151644, 77091, 198]
+            )
         tokenizer = self.model._tokenizer
         if hasattr(tokenizer, "chat_template") and tokenizer.chat_template:
             messages = [{"role": "user", "content": text}]
@@ -100,8 +111,11 @@ class LLM():
                 res = res["input_ids"]
             if hasattr(res, "tolist"):
                 res = res.tolist()
-            if isinstance(res, list) and len(
-                    res) > 0 and isinstance(res[0], list):
+            if (
+                isinstance(res, list)
+                and len(res) > 0
+                and isinstance(res[0], list)
+            ):
                 res = res[0]
             return res
         return self.model.encode(text).squeeze().tolist()

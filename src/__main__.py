@@ -20,24 +20,33 @@ def build_parser() -> argparse.ArgumentParser:
         argparse.ArgumentParser: The configured argument parser.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--functions_definition", help="Path to functions "
-                        "definition json file")
+    parser.add_argument(
+        "--functions_definition", help="Path to functions definition json file"
+    )
     parser.add_argument("--input", help="Path to function calling json file")
     parser.add_argument("--output", help="Path to output file")
     parser.add_argument("--llm_path", help="Path to LLM")
     parser.add_argument("--llm_name", help="Name of LLM model (name of class)")
-    parser.add_argument("--visual", action="store_true",
-                        help="Enable live CLI dashboard rendering")
+    parser.add_argument(
+        "--visual",
+        action="store_true",
+        help="Enable live CLI dashboard rendering",
+    )
     parser.add_argument("--model", help="Path or name of the HF model to load")
-    parser.add_argument("--tokenizer", action="store_true",
-                        help="Use custom BPE tokenizer instead of HF")
+    parser.add_argument(
+        "--tokenizer",
+        action="store_true",
+        help="Use custom BPE tokenizer instead of HF",
+    )
     return parser
 
 
-def generate_result(decoder: ConstrainedDecoder,
-                    loader: Loader,
-                    test_prompt: TestPrompt,
-                    visualize: bool) -> FunctionCallResult:
+def generate_result(
+    decoder: ConstrainedDecoder,
+    loader: Loader,
+    test_prompt: TestPrompt,
+    visualize: bool,
+) -> FunctionCallResult:
     """Executes the constrained decoding process and returns the parsed result.
 
     Args:
@@ -50,15 +59,15 @@ def generate_result(decoder: ConstrainedDecoder,
         FunctionCallResult: A parsed, validated Pydantic model of the output.
     """
     prompt = PromptConstructor.build_prompt(loader.fn_defs, test_prompt.prompt)
-    
+
     visualizer = Visualizer(decoder.llm.id2token) if visualize else None
-    
+
     generated_tokens = []
     for event in decoder.generate(prompt, test_prompt.prompt, loader.fn_defs):
         if visualizer:
             visualizer.render(event)
         generated_tokens.append(event.next_token_id)
-        
+
     generated_text = decoder.llm.model.decode(generated_tokens)
     loads = json.loads(generated_text)
 
@@ -79,8 +88,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
     """
     loader = Loader(args.functions_definition, args.input)
 
-    llm = LLM(args.llm_path, args.llm_name, args.model,
-              tokenizer=args.tokenizer)
+    llm = LLM(
+        args.llm_path, args.llm_name, args.model, tokenizer=args.tokenizer
+    )
     decoder = ConstrainedDecoder(llm)
 
     results = []
