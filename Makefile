@@ -1,8 +1,14 @@
-# UNCOMMENT these lines if you are not in 42 prague clusters!
 # The size of HDD space in 42 clusters is very limited.
+# Write 'make exports' to save caches on ~/sgoinfre folder
+#	(if you are running this project on 42 prague devices).
 LOGIN = vlnikola
+
+# Read export state (defaults to 1 if file doesn't exist)
+EXPORT_STATE := $(shell cat .export_state 2>/dev/null || echo "1")
+ifeq ($(EXPORT_STATE),1)
 export HF_HOME = /sgoinfre/$(LOGIN)/.cache/huggingface
 export TORCH_HOME = /sgoinfre/$(LOGIN)/.cache/torch
+endif
 
 # ========================= CHANGE THESE ======================================
 FUNCTIONS_JSON = data/input/functions_definition.json
@@ -87,6 +93,7 @@ clean:
 	find . -type f -name "*.pyc" -delete
 	rm -rf .venv
 	rm -rf data/output
+	rm -f .export_state
 
 clean-cache:
 	@printf "$(RED)Cleaning caches...$(RESET)\n"
@@ -106,6 +113,15 @@ lint-strict:
 	$(UV) run flake8 src/ tests/
 	$(UV) run mypy src/ tests/ --strict
 
+exports:
+	@if [ "$(EXPORT_STATE)" = "1" ]; then \
+		echo "0" > .export_state; \
+		printf "$(RED)Exports toggled OFF (will not use /sgoinfre caches)$(RESET)\n"; \
+	else \
+		echo "1" > .export_state; \
+		printf "$(GREEN)Exports toggled ON (will use /sgoinfre caches)$(RESET)\n"; \
+	fi
+
 help:
 	@printf "============================================================================\n"
 	@printf "Welcome to the Makefile for the project!\n"
@@ -117,10 +133,6 @@ help:
 	@printf "LLM module path/name in the Makefile variables.$(RESET)\n"
 	@printf "\n"
 	@printf "Optionally, you can set the path to a custom model in the $(GREEN)MODEL_PATH$(RESET) variable.\n"
-	@printf "\n"
-	@printf "If you are not in 42 prague clusters, you should uncomment the following lines:\n"
-	@printf "$(GREEN)  export HF_HOME = /sgoinfre/your_login/.cache/huggingface\n"
-	@printf "  export TORCH_HOME = /sgoinfre/your_login/.cache/torch\n"
 	@printf "\n"
 	@printf "$(RESET)----------------------------------------------------------------------------$(RESET)\n"
 	@printf "$(YELLOW)Available targets:$(RESET)\n"
@@ -138,7 +150,8 @@ help:
 	@printf "  $(GREEN)clean-cache$(RESET)        - Remove only cache files\n"
 	@printf "  $(GREEN)lint$(RESET)               - Run code linting and type checking\n"
 	@printf "  $(GREEN)lint-strict$(RESET)        - Run strict code linting and type checking\n"
+	@printf "  $(GREEN)exports$(RESET)            - Toggle the HF_HOME and TORCH_HOME exports on/off\n"
 	@printf "  $(GREEN)help$(RESET)               - Show this help message\n"
 	@printf "===========================================================================\n"
 
-.PHONY: all install run run-full run-visual run-interactive run-custom run-custom-visual run-custom-full test debug clean clean-cache lint lint-strict help
+.PHONY: all install run run-full run-visual run-interactive run-custom run-custom-visual run-custom-full test debug clean clean-cache lint lint-strict exports help
