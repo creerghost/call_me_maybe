@@ -68,7 +68,7 @@ class ConstrainedDecoder:
             },
         )
         # as we parse deeper into json we will push more nodes into stack
-        context = {
+        context: dict[str, Any] = {
             "stack": [root_node],
             "func_defs": {f'"{f.name}"': f for f in func_defs},
             "allowed_funcs": [f'"{f.name}"' for f in func_defs],
@@ -80,17 +80,20 @@ class ConstrainedDecoder:
                 state, current_prefix, context
             )
 
-            valid_ids = self._handle_error_recovery(
-                state, context, state_token_count, valid_ids
-            )
+            if state == JSONState.EXPECT_VALUE:
+                current_node = context["stack"][-1]
+                val_type = current_node.get_child_type(
+                    context.get("current_key")
+                )
+                if val_type == "string" and state_token_count > 20:
+                    valid_ids = self.masker.quote_ids
 
             if not valid_ids:
                 break
 
             if len(valid_ids) == 1:
-                next_token_id, token_str = self._fast_forward_token(
-                    valid_ids, state
-                )
+                next_token_id = valid_ids[0]
+                token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
                 fast_forwarded = True
                 logits_out = None
             else:
@@ -134,55 +137,6 @@ class ConstrainedDecoder:
 
             if len(generated_tokens) > 200:
                 break
-
-    def _handle_error_recovery(
-        self,
-        state: JSONState,
-        context: dict[str, Any],
-        state_token_count: int,
-        valid_ids: list[int],
-    ) -> list[int]:
-        """Intercepts loops during generation to forcefully close stuck JSON
-        structures.
-
-        Args:
-            state (JSONState): The current FSM state.
-            context (dict[str, Any]): Dictionary containing generation context.
-            state_token_count (int): How many consecutive tokens have
-                been generated in the current state.
-            valid_ids (list[int]): Allowed tokens calculated by the masker.
-
-        Returns:
-            list[int]: The modified (or original) list of valid tokens.
-        """
-        if state == JSONState.EXPECT_VALUE:
-            current_node = context["stack"][-1]
-            val_type = current_node.get_child_type(context.get("current_key"))
-
-            if val_type == "string" and state_token_count > 20:
-                # print("\n[ERROR RECOVERY] String length exceeded limit."
-                #       " Forcing closing quote.")
-                return self.masker.quote_ids
-        return valid_ids
-
-    def _fast_forward_token(
-        self, valid_ids: list[int], state: JSONState
-    ) -> tuple[int, str]:
-        """Optimizes generation by bypassing the LLM if only one token is
-        logically valid.
-
-        Args:
-            valid_ids (list[int]): Guaranteed exactly length
-                1.
-            state (JSONState): The current state.
-
-        Returns:
-            tuple[int, str]: The token ID and string of the
-                fast-forwarded token.
-        """
-        next_token_id = valid_ids[0]
-        token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
-        return next_token_id, token_str
 
     def _generate_token_with_llm(
         self,
