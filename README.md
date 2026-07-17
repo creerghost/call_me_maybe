@@ -38,7 +38,7 @@ While massive models <sup>[3](#glossary-3)</sup> like GPT-4 can reliably output 
 - **Interactive Mode:** Added an `--interactive` flag (and `make run-interactive`) to bypass batch processing and prompt the user continuously for custom inputs directly from the terminal.
 - **Custom BPE Tokenizer:** A from-scratch, pure Python `regex` Byte-Pair Encoding <sup>[19](#glossary-19)</sup> <sup>[15](#glossary-15)</sup> tokenizer (enabled via `--tokenizer`) mapping raw bytes to unicode for strict vocabulary alignment without depending on HuggingFace tokenizers.
 - **Multiple Model Support:** The engine dynamically supports loading any HuggingFace causal language model via the `--model` CLI flag (e.g., `microsoft/Phi-3-mini-4k-instruct` or `TinyLlama/TinyLlama-1.1B-Chat-v1.0`).
-- **Performance Optimizations:** Implemented LRU memoization <sup>[16](#glossary-16)</sup> for token masks, a "fast-forward" generation skip for deterministic tokens, and utilized `numpy` arrays and PyTorch tensors for vectorized logit masking to avoid slow native Python loops, drastically boosting Tokens Per Second (TPS).
+- **Performance Optimizations & Framework Agnosticism:** Implemented LRU memoization <sup>[16](#glossary-16)</sup> for token masks, a "fast-forward" generation skip for deterministic tokens, and utilized pure `numpy` arrays for vectorized logit masking to avoid slow native Python loops, drastically boosting Tokens Per Second (TPS) while keeping the pipeline lightweight.
 - **Advanced Error Recovery:** Implemented state-bound max-length constraints and dynamic logit boosting to prevent small LLMs from falling into infinite generation loops when trapped in string-generation states.
 - **Comprehensive Test Suite:** Developed a robust `pytest` suite validating schema parsing, Pydantic bounds, and the constrained decoder's edge cases.
 
@@ -128,10 +128,31 @@ This entire process runs efficiently via `numpy` arrays to prevent excessive Pyt
 
 ## 7. Pipeline example
 
-To understand how Call Me Maybe processes a request, let's walk through the pipeline step-by-step.
+To understand how Call Me Maybe processes a request, let's walk through the full pipeline with a concrete example: **"What is the sum of 2 and 3?"** using the `fn_add_numbers` function.
 
-**1. Input Definitions:**
-First, the system loads a JSON file containing available functions. For example:
+### 7.1 High-Level Pipeline Overview
+
+```mermaid
+flowchart LR
+    A["📄 Input Files"] --> B["🔧 Loader"]
+    B --> C["📝 PromptConstructor"]
+    C --> D["🧠 LLM + ConstrainedDecoder"]
+    D --> E["📊 Visualizer (optional)"]
+    D --> F["💾 Output JSON"]
+
+    style A fill:#2d3748,stroke:#4a5568,color:#e2e8f0
+    style B fill:#2d3748,stroke:#4a5568,color:#e2e8f0
+    style C fill:#2d3748,stroke:#4a5568,color:#e2e8f0
+    style D fill:#553c9a,stroke:#6b46c1,color:#e2e8f0
+    style E fill:#2d3748,stroke:#4a5568,color:#e2e8f0
+    style F fill:#2d3748,stroke:#4a5568,color:#e2e8f0
+```
+
+### 7.2 Step 1 — Loading Inputs
+
+The `Loader` reads two JSON files:
+
+**Function Definition** (`functions_definition.json`):
 ```json
 {
   "name": "fn_add_numbers",
@@ -143,30 +164,147 @@ First, the system loads a JSON file containing available functions. For example:
   "returns": { "type": "number" }
 }
 ```
-It also receives a user prompt: *"What is the sum of 265 and 345?"*
 
-**2. Prompt Building:**
-The `PromptConstructor` formats this into a strict, readable text block (often using the model's native Chat Template like `<|user|>`) to give the LLM the exact context of the functions and the user's request.
+**Test Prompt** (`input.json`):
+```json
+["What is the sum of 2 and 3?"]
+```
 
-**3. Token Generation & Constraint Checking:**
-The LLM is an "autoregressive" model, meaning it cannot generate an entire response at once. It must mathematically predict the output strictly one token (word or chunk of a word) at a time. For every single token it generates, it recalculates the massive logit scoreboard. Our decoder continuously intercepts this loop: 
-- The decoder state machine is initialized at `OBJECT_START`.
-- Before the LLM can say "Sure, here is the answer", the decoder steps in, blocks all conversational words in the filing cabinet, and forces the LLM to output `{`.
-- Next, the state shifts to `KEY_NAME`. The decoder blocks everything except quotes and letters, forcing `"name":`.
-- Next, the state shifts to `NAME_VALUE`, and dynamically limits the LLM's vocabulary to *only* the string `"fn_add_numbers"` because it is the only valid function. The LLM is essentially trapped and has no choice but to output the correct function name.
-- When it reaches the parameters, the state shifts to `PARAM_VALUE` expecting a number. The decoder masks the vocabulary, meaning the LLM can *only* predict digits. It calculates the concept fingerprint for the answer and sees that `265` and `345` have the highest compatibility scores among the allowed digit tokens.
+At this point the `Loader` validates both files via **Pydantic** models, producing:
 
-**4. Final JSON Output:**
-The generated tokens are concatenated and parsed. Because the state machine mathematically prevented syntax errors at every single step, the output is guaranteed to be:
+| Variable | Value |
+|---|---|
+| `func_defs` | `[FunctionDefinition(name="fn_add_numbers", parameters={"a": number, "b": number})]` |
+| `test_prompts` | `[TestPrompt("What is the sum of 2 and 3?")]` |
+
+### 7.3 Step 2 — Building the Prompt
+
+The `PromptConstructor` takes the function definitions and the user question, and formats them into a single text block wrapped in the model's native **Chat Template** (e.g., Qwen's ChatML tags `<|im_start|>user\n...<|im_end|>`).
+
+| Variable | Value |
+|---|---|
+| `prompt` | `"You are given the following functions...\nfn_add_numbers: Add two numbers...\nUser: What is the sum of 2 and 3?"` |
+| `input_ids` | `[151644, 872, 198, 2610, 525, ...]` *(449 token IDs after encoding)* |
+
+The LLM receives **only** these integer IDs — it never sees human-readable text.
+
+### 7.4 Step 3 — Constrained Decoding (FSM)
+
+This is the core of the engine. The `ConstrainedDecoder` initializes a **Finite State Machine** and a **context stack** that tracks our position inside the JSON structure:
+
+| Variable | Initial Value |
+|---|---|
+| `state` | `EXPECT_OBJECT_START` |
+| `current_prefix` | `""` |
+| `full_json_string` | `""` |
+| `context.stack` | `[SchemaNode(type="object", remaining_keys={"name", "parameters"})]` |
+| `context.allowed_funcs` | `['"fn_add_numbers"']` |
+| `context.current_key` | `None` |
+
+The following diagram shows every FSM state transition that occurs while generating the complete JSON output `{"name":"fn_add_numbers","parameters":{"a":2,"b":3}}`:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    EXPECT_OBJECT_START --> EXPECT_KEY : "{"
+    EXPECT_KEY --> EXPECT_COLON : '"name"'
+    EXPECT_COLON --> EXPECT_VALUE : ":"
+
+    EXPECT_VALUE --> EXPECT_COMMA_OR_END : '"fn_add_numbers"'
+
+    EXPECT_COMMA_OR_END --> EXPECT_KEY : ","
+    EXPECT_KEY --> EXPECT_COLON : '"parameters"'
+    EXPECT_COLON --> EXPECT_OBJECT_START : ":" (nested object)
+
+    EXPECT_OBJECT_START --> EXPECT_KEY : "{"
+    EXPECT_KEY --> EXPECT_COLON : '"a"'
+    EXPECT_COLON --> EXPECT_VALUE : ":"
+    EXPECT_VALUE --> EXPECT_COMMA_OR_END : "2,"
+
+    EXPECT_COMMA_OR_END --> EXPECT_KEY : ","
+    note left of EXPECT_KEY : remaining_keys = {'"b"'}
+    EXPECT_KEY --> EXPECT_COLON : '"b"'
+    EXPECT_COLON --> EXPECT_VALUE : ":"
+    EXPECT_VALUE --> EXPECT_COMMA_OR_END : "3}"
+
+    EXPECT_COMMA_OR_END --> DONE : "}"
+```
+
+### 7.5 Step 4 — Token-by-Token Generation Trace
+
+The table below shows the exact internal variables on each generation step. **⚡ Fast-forwarded** tokens skip the LLM entirely because only one token is valid.
+
+| Step | State | Token | `full_json_string` | `valid_ids` count | `remaining_keys` | Fast-Forward? |
+|---:|---|---|---|---:|---|:---:|
+| 1 | `EXPECT_OBJECT_START` | `{` | `{` | 1 | `{"name","parameters"}` | ⚡ |
+| 2 | `EXPECT_KEY` | `"name"` | `{"name"` | ≤3 | `{"parameters"}` | |
+| 3 | `EXPECT_COLON` | `:` | `{"name":` | 1 | `{"parameters"}` | ⚡ |
+| 4 | `EXPECT_VALUE` | `"fn_add` | `{"name":"fn_add` | ≤5 | `{"parameters"}` | |
+| 5 | `EXPECT_VALUE` | `_numbers"` | `{"name":"fn_add_numbers"` | ≤3 | `{"parameters"}` | |
+| 6 | `EXPECT_COMMA_OR_END` | `,` | `{"name":"fn_add_numbers",` | 1 | `{"parameters"}` | ⚡ |
+| 7 | `EXPECT_KEY` | `"parameters"` | `...,"parameters"` | 1 | `{}` | ⚡ |
+| 8 | `EXPECT_COLON` | `:` | `...,"parameters":` | 1 | — | ⚡ |
+| 9 | `EXPECT_OBJECT_START` | `{` | `...,"parameters":{` | 1 | `{"a","b"}` | ⚡ |
+| 10 | `EXPECT_KEY` | `"a"` | `...:{"a"` | ≤3 | `{"b"}` | |
+| 11 | `EXPECT_COLON` | `:` | `...:{"a":` | 1 | `{"b"}` | ⚡ |
+| 12 | `EXPECT_VALUE` | `2` | `...:{"a":2` | ≤50 | `{"b"}` | |
+| 13 | `EXPECT_VALUE` | `,` | `...:{"a":2,` | ≤5 | `{"b"}` | |
+| 14 | `EXPECT_KEY` | `"b"` | `...2,"b"` | 1 | `{}` | ⚡ |
+| 15 | `EXPECT_COLON` | `:` | `...2,"b":` | 1 | `{}` | ⚡ |
+| 16 | `EXPECT_VALUE` | `3` | `...2,"b":3` | ≤50 | `{}` | |
+| 17 | `EXPECT_VALUE` | `}` | `...2,"b":3}` | ≤5 | — | |
+| 18 | `EXPECT_COMMA_OR_END` | `}` | `...3}}` | 1 | — | ⚡ |
+| 19 | `DONE` | — | `{"name":"fn_add_numbers","parameters":{"a":2,"b":3}}` | — | — | — |
+
+> **Key insight:** Steps marked ⚡ completely bypass the expensive LLM forward pass. In this 18-step generation, roughly **half** the tokens are fast-forwarded — meaning the LLM only runs ~9 actual inference calls instead of 18.
+
+### 7.6 Step 5 — Masking in Action
+
+At every non-fast-forwarded step, the `TokenMasker` builds a **numpy boolean mask** over the full vocabulary (~150,000 tokens). Here is what happens at Step 12, when the decoder expects the numeric value for parameter `"a"`:
+
+```mermaid
+flowchart TD
+    A["LLM produces logits\n150,000 scores"] --> B["TokenMasker filters vocabulary"]
+    B --> C{"Is token a valid\nnumber character?\n(0-9, '.', '-')"}
+    C -- Yes --> D["Keep original logit score"]
+    C -- No --> E["Set logit to -inf"]
+    D --> F["numpy argmax selects\nhighest scoring valid token"]
+    E --> F
+    F --> G["Selected token: '2'\n(highest logit among digits)"]
+
+    style A fill:#2d3748,stroke:#4a5568,color:#e2e8f0
+    style B fill:#553c9a,stroke:#6b46c1,color:#e2e8f0
+    style C fill:#2d3748,stroke:#4a5568,color:#e2e8f0
+    style D fill:#276749,stroke:#38a169,color:#e2e8f0
+    style E fill:#9b2c2c,stroke:#e53e3e,color:#e2e8f0
+    style F fill:#553c9a,stroke:#6b46c1,color:#e2e8f0
+    style G fill:#276749,stroke:#38a169,color:#e2e8f0
+```
+
+| Variable | Value at Step 12 |
+|---|---|
+| `state` | `EXPECT_VALUE` |
+| `val_type` | `"number"` |
+| `valid_ids` | `[48, 49, 50, ..., 3974, ...]` *(all digit-containing tokens)* |
+| `logits_t` | `np.array([...], dtype=float32)` *(150k raw scores)* |
+| `mask` | `np.full(150000, -inf)` then `mask[valid_ids] = logits_t[valid_ids]` |
+| `next_token_id` | `int(np.argmax(mask))` → token for `"2"` |
+
+### 7.7 Step 6 — Final Output
+
+The generated tokens are concatenated and parsed. Because the state machine mathematically prevented syntax errors at every single step, the output is **guaranteed** to be valid JSON matching the schema:
 ```json
 {
   "name": "fn_add_numbers",
   "parameters": {
-    "a": 265,
-    "b": 345
+    "a": 2,
+    "b": 3
   }
 }
 ```
+
+The result is saved to `data/output/function_calling_results.json` via the `Output` class, alongside metadata about the user prompt and generation speed.
 
 ---
 
@@ -268,7 +406,7 @@ Generated Token: ' :' (ID: 549)
 ### Tokens Per Second (TPS)
 The primary bottleneck in autoregressive generation is the LLM's forward pass. However, constrained decoding adds overhead because we must filter a massive logits array on the CPU.
 - **Without caching:** The token filtering added ~150ms of overhead per generation step, reducing generation to ~4 TPS.
-- **With Caching & Vectorized Masking:** To avoid crippling performance with native Python loops, I utilized `numpy` arrays in the BPE tokenizer and PyTorch tensors in the decoder. By applying vectorized operations to mask invalid tokens with `-inf` and leveraging `@lru_cache` for static states, the overhead was reduced to <5ms.
+- **With Caching & Vectorized Masking:** To avoid crippling performance with native Python loops, the entire pipeline (from tokenizer to decoder) operates on pure `numpy` arrays. By applying `numpy`'s vectorized operations to mask invalid tokens with `-inf` and leveraging `@lru_cache` for static states, the overhead was reduced to <5ms.
 - **Fast-Forwarding:** Because deterministic characters (`{`, `"`, `:`, `,`, `}`) skip the LLM entirely, effective TPS increased to **~15-20 TPS** on standard hardware, meaning the decoding constraint is nearly cost-free.
 
 ### Accuracy
@@ -301,7 +439,7 @@ Tested against `Qwen/Qwen2.5-0.5B` and `TinyLlama-1.1B`:
    Using the dynamic `apply_chat_template` method introduced massive inconsistencies. HuggingFace tokenizers are not uniform: for some models (like Qwen), `apply_chat_template` returns a simple, flat Python list of integers `[1, 2, 3]`. For other models, it returns a dictionary-like `BatchEncoding` object containing multi-dimensional PyTorch tensors (e.g., `{'input_ids': tensor([[1, 2, 3]])}`). The `encode()` function required implementing a strict, dynamic type-checking and flattening mechanism to ensure the decoder loop didn't crash during list concatenation operations later in the pipeline.
 
 4. **Performance Overhead of CPU Logit Filtering:**
-   Initially, the engine ran at a sluggish 4 Tokens Per Second (TPS). Iterating over a 150,000-token vocabulary and performing string comparisons for *every single generation step* on the CPU was crippling performance. I solved this by implementing the `@lru_cache` decorator to memoize valid token masks for static states (like `NAME_KEY`), and by creating a Fast-Forward optimization that completely skips the LLM forward pass when only one token is logically possible (like `:`).
+   Initially, the engine ran at a sluggish 4 Tokens Per Second (TPS). Iterating over a 150,000-token vocabulary and performing string comparisons for *every single generation step* on the CPU was crippling performance. To solve this, the pipeline was transitioned entirely to `numpy` for vectorized masking, stripping heavy dependencies like PyTorch out of the custom decoding loop. Furthermore, I implemented the `@lru_cache` decorator to heavily memoize `numpy` boolean filters for static states (like expecting `{` or `:`), alongside a Fast-Forward optimization that completely skips the LLM forward pass when only one token is logically possible.
 
    *Implementation Example:*
    ```python
@@ -346,14 +484,21 @@ Tested against `Qwen/Qwen2.5-0.5B` and `TinyLlama-1.1B`:
 10. **Decoupling the Visualizer via Generators:**
     Early iterations of the `ConstrainedDecoder` were tightly coupled with terminal `print` statements, making the logic difficult to test and inflexible. I executed a complete architectural refactor, transitioning the decoder into a pure Python generator that simply `yield`s Pydantic `GenerationEvent`s. This allowed me to build a completely detached `Visualizer` class that calculates TPS and Numpy-based softmax probabilities without polluting the core decoding pipeline.
 
+11. **FSM Generalization (Schema Refactoring):**
+    The original Finite State Machine was rigidly hardcoded to the specific function-calling schema. It used highly specific, sequential states like `NAME_KEY`, `NAME_VALUE`, `PARAMS_KEY`, and `PARAM_VALUE`. While this worked for a flat structure, it became entirely unmaintainable when trying to parse nested objects or arrays. I executed a major refactor to generalize the FSM to track fundamental JSON syntax instead (`EXPECT_OBJECT_START`, `EXPECT_KEY`, `EXPECT_COLON`, `EXPECT_VALUE`). By pairing these generic states with a dynamic context `stack` that tracks schema nodes, the engine can now parse infinitely nested arrays and objects without hardcoding any specific keys into the FSM logic.
+
 ---
 
 ## 13. Testing strategy
 
 The project utilizes `pytest` for robust unit testing:
-- **Model Validation Tests:** Ensures Pydantic models correctly reject empty strings, invalid types, and malformed dictionaries.
+- **Model Validation Tests:** Ensures Pydantic models correctly reject empty strings, invalid types, and malformed dictionaries across edge cases (e.g. extremely long strings, negative numbers).
 - **Schema Tests:** Validates that the `Loader` class correctly handles missing files and gracefully reports JSON decode errors.
+- **Tokenizer Alignment Tests:** The `test_tokenizer.py` suite actively compares the outputs of the custom pure-Python BPE tokenizer against the official HuggingFace `transformers` tokenizer. This uses robust parameterized testing to ensure 100% 1-to-1 parity on complex unicode strings, numbers, punctuation, and multi-line whitespaces.
+- **Static Analysis & Linting:** The pipeline enforces rigorous static type checking via `mypy --strict` to ensure type integrity between the JSON State Machine and numpy array bounds. The `flake8` linter guarantees strict PEP-8 stylistic compliance. Both are automatically run via `make lint-strict`.
 - **Integration Tests:** The `data/output/function_calling_results.json` acts as a regression test artifact. By diffing the output against known good runs, I can verify that updates to the state machine do not break generation accuracy.
+
+Currently, the test suite executes **86 distinct tests**, validating the entire flow from initial schema parsing to final tokenizer decoding.
 
 To run the test suite:
 ```bash
