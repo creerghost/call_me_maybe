@@ -133,7 +133,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         for i, test_prompt in enumerate(loader.test_prompts):
             res = generate_result(decoder, loader, test_prompt, args.visual)
             results.append(res)
-        OutputWriter.write_output(results, args.output)
+            OutputWriter.write_output(results, args.output)
 
 
 @catch

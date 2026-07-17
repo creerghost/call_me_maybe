@@ -10,6 +10,7 @@ class Visualizer:
     def __init__(self, id2token: dict[int, str]):
         """Initializes the instance."""
         self.start_time: Optional[float] = None
+        self.last_time: Optional[float] = None
         self.token_count = 0
         self.id2token = id2token
 
@@ -20,13 +21,22 @@ class Visualizer:
             event (GenerationEvent): The latest generation event
                 containing all metrics.
         """
+        now = time.time()
         if self.start_time is None:
-            self.start_time = time.time()
+            self.start_time = now
+            self.last_time = now
 
         self.token_count += 1
         assert self.start_time is not None
-        elapsed = time.time() - self.start_time
-        tps = self.token_count / elapsed if elapsed > 0 else 0.0
+        assert self.last_time is not None
+
+        elapsed_total = now - self.start_time
+        avg_tps = self.token_count / elapsed_total \
+            if elapsed_total > 0 else 0.0
+
+        elapsed_step = now - self.last_time
+        inst_tps = 1.0 / elapsed_step if elapsed_step > 0 else 0.0
+        self.last_time = now
 
         dashboard = "\033[2J\033[H"  # clear screen & cursor home
         dashboard += "\033[96m=== Constrained JSON Decoder ===\033[0m\n\n"
@@ -53,7 +63,7 @@ class Visualizer:
             f"(was {event.old_state.name})\n"
         )
         dashboard += f"\033[92mContext Path:\033[0m {path}\n"
-        dashboard += f"\033[92mSpeed:\033[0m {tps:.1f} tokens/sec\n\n"
+        dashboard += f"\033[92mSpeed:\033[0m {inst_tps:.1f} tokens/sec (Avg: {avg_tps:.1f} tokens/sec)\n\n"
 
         if event.fast_forwarded:
             dashboard += (
