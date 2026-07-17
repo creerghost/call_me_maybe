@@ -10,7 +10,7 @@ from .fsm import JSONState, JSONStateMachine
 from .masker import TokenMasker
 
 # ONLY for performace optimization: working with tensors to not have big loops
-import torch
+import numpy as np
 
 
 class ConstrainedDecoder:
@@ -21,11 +21,11 @@ class ConstrainedDecoder:
         self.llm = llm
         self.fsm = JSONStateMachine()
         self.masker = TokenMasker(llm)
-        self.stop_token_ids_tensor = torch.tensor(
-            list(self.masker.stop_token_ids), dtype=torch.long
+        self.stop_token_ids_tensor = np.array(
+            list(self.masker.stop_token_ids), dtype=np.int32
         )
-        self.quote_ids_tensor = torch.tensor(
-            self.masker.quote_ids, dtype=torch.long
+        self.quote_ids_tensor = np.array(
+            self.masker.quote_ids, dtype=np.int32
         )
 
     def generate(
@@ -165,9 +165,9 @@ class ConstrainedDecoder:
         """
         logits = self.llm.get_logits(input_ids + generated_tokens)
 
-        logits_t = torch.tensor(logits, dtype=torch.float32)
-        valid_ids_tensor = torch.tensor(valid_ids, dtype=torch.long)
-        mask = torch.full((len(logits_t),), float("-inf"))
+        logits_t = np.array(logits, dtype=np.float32)
+        valid_ids_tensor = np.array(valid_ids, dtype=np.int32)
+        mask = np.full(len(logits_t), float("-inf"), dtype=np.float32)
         mask[valid_ids_tensor] = logits_t[valid_ids_tensor]
 
         if state == JSONState.EXPECT_VALUE:
@@ -175,19 +175,19 @@ class ConstrainedDecoder:
             val_type = current_node.get_child_type(context.get("current_key"))
 
             if val_type in ("number", "integer"):
-                mask[self.stop_token_ids_tensor] = torch.where(
+                mask[self.stop_token_ids_tensor] = np.where(
                     mask[self.stop_token_ids_tensor] > float("-inf"),
                     mask[self.stop_token_ids_tensor] + 10.0,
                     mask[self.stop_token_ids_tensor],
                 )
             elif val_type == "string" and state_token_count > 3:
-                mask[self.quote_ids_tensor] = torch.where(
+                mask[self.quote_ids_tensor] = np.where(
                     mask[self.quote_ids_tensor] > float("-inf"),
                     mask[self.quote_ids_tensor] + 5.0,
                     mask[self.quote_ids_tensor],
                 )
 
-        next_token_id = int(torch.argmax(mask).item())
+        next_token_id = int(np.argmax(mask))
         token_str = self.llm.id2token[next_token_id].replace("Ġ", " ")
 
         return next_token_id, token_str, logits
