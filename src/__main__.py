@@ -76,7 +76,8 @@ def generate_result(
     """
     prompt = PromptConstructor.build_prompt(loader.fn_defs, test_prompt.prompt)
 
-    visualizer = Visualizer(decoder.llm.id2token) if visualize else None
+    visualizer = Visualizer(id2token=decoder.llm.id2token) \
+        if visualize else None
 
     generated_tokens = []
 
@@ -105,10 +106,14 @@ def run_pipeline(args: argparse.Namespace) -> None:
         args (argparse.Namespace): The parsed command line arguments containing
             all file paths and execution flags.
     """
-    loader = Loader(args.functions_definition, args.input)
+    loader = Loader(fdef_name=args.functions_definition,
+                    fcall_name=args.input)
 
     llm = LLM(
-        args.llm_path, args.llm_name, args.model, tokenizer=args.tokenizer
+        llm_path=args.llm_path,
+        llm_name=args.llm_name,
+        hf_model=args.model,
+        use_tokenizer=args.tokenizer,
     )
     decoder = ConstrainedDecoder(llm)
 

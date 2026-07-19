@@ -38,7 +38,7 @@ def test_loader_valid_files_created(tmp_path: Path) -> None:
     valid_call_data = [{"prompt": "test prompt"}]
     fcall.write_text(json.dumps(valid_call_data))
 
-    loader = Loader(str(fdef), str(fcall))
+    loader = Loader(fdef_name=str(fdef), fcall_name=str(fcall))
 
     assert len(loader.fn_defs) == 1
     assert len(loader.test_prompts) == 1
@@ -49,7 +49,10 @@ def test_loader_valid_files_created(tmp_path: Path) -> None:
 def test_loader_file_not_found() -> None:
     """Tests that a LoaderError is raised when a file does not exist."""
     with pytest.raises(LoaderError):
-        Loader("does_not_exist.json", "data/input/function_calling_tests.json")
+        Loader(
+            fdef_name="does_not_exist.json",
+            fcall_name="data/input/function_calling_tests.json"
+        )
 
 
 # tmp path is built-in pytest variable
@@ -63,7 +66,7 @@ def test_loader_broken_json(tmp_path: Path) -> None:
     broken_file.write_text("{ this is not a valid json object }")
 
     with pytest.raises(LoaderError):
-        Loader(str(broken_file), str(broken_file))
+        Loader(fdef_name=str(broken_file), fcall_name=str(broken_file))
 
 
 def test_loader_broken_json_empty(tmp_path: Path) -> None:
@@ -76,7 +79,7 @@ def test_loader_broken_json_empty(tmp_path: Path) -> None:
     broken_file.write_text("{}")
 
     with pytest.raises(LoaderError):
-        Loader(str(broken_file), str(broken_file))
+        Loader(fdef_name=str(broken_file), fcall_name=str(broken_file))
 
 
 def test_loader_extra_keys_in_function_def(tmp_path: Path) -> None:
@@ -94,7 +97,7 @@ def test_loader_extra_keys_in_function_def(tmp_path: Path) -> None:
         "extra_key": "should fail",
     }]))
     with pytest.raises(LoaderError):
-        Loader(str(fdef))
+        Loader(fdef_name=str(fdef))
 
 
 def test_loader_missing_required_field(tmp_path: Path) -> None:
@@ -109,7 +112,7 @@ def test_loader_missing_required_field(tmp_path: Path) -> None:
         "parameters": {"a": {"type": "string"}},
     }]))
     with pytest.raises(LoaderError):
-        Loader(str(fdef))
+        Loader(fdef_name=str(fdef))
 
 
 def test_loader_empty_array(tmp_path: Path) -> None:
@@ -121,7 +124,7 @@ def test_loader_empty_array(tmp_path: Path) -> None:
     fdef: Path = tmp_path / "empty_arr.json"
     fdef.write_text("[]")
     with pytest.raises(LoaderError):
-        Loader(str(fdef))
+        Loader(fdef_name=str(fdef))
 
 
 def test_loader_null_json(tmp_path: Path) -> None:
@@ -133,4 +136,4 @@ def test_loader_null_json(tmp_path: Path) -> None:
     fdef: Path = tmp_path / "null.json"
     fdef.write_text("null")
     with pytest.raises((LoaderError, TypeError)):
-        Loader(str(fdef))
+        Loader(fdef_name=str(fdef))
