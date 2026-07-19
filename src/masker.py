@@ -61,7 +61,8 @@ class ValueMasker(BaseModel):
             )
         else:
             mask = np.array(
-                [remainder.startswith(s) and s != "" for s in self._token_strs],
+                [remainder.startswith(s) and s !=
+                 "" for s in self._token_strs],
                 dtype=bool,
             )
         return cast(list[int], self.llm.token_ids[mask].tolist())

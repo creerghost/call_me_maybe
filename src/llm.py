@@ -103,7 +103,9 @@ class LLM(BaseModel):
         """
         return self._model.get_logits_from_input_ids(input_ids)
 
-    def encode(self, text: str, apply_chat_template: bool = True) -> list[int] | Any:
+    def encode(
+        self, text: str, apply_chat_template: bool = True
+    ) -> list[int] | Any:
         """Encodes text into token IDs, optionally applying chat templates.
 
         Args:

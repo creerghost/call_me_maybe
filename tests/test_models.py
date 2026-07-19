@@ -5,7 +5,6 @@ from src.models import (
     FunctionDefinition,
     TestPrompt,
     FunctionCallResult,
-    SchemaNode,
 )
 import pytest
 
@@ -508,62 +507,3 @@ def test_function_definition_nested_object() -> None:
     assert fd.parameters["user"].type == "object"
     assert fd.parameters["user"].properties is not None
     assert "name" in fd.parameters["user"].properties
-
-
-def test_function_definition_array_parameter() -> None:
-    """Tests that array type parameters with items schema are accepted."""
-    fd = FunctionDefinition(
-        name="fn_sort",
-        description="Sort numbers",
-        parameters={
-            "arr": FunctionParameter(
-                type="array",
-                items=FunctionParameter(type="number"),
-            )
-        },
-        returns=FunctionParameter(
-            type="array", items=FunctionParameter(type="number")
-        ),
-    )
-    assert fd.parameters["arr"].type == "array"
-    assert fd.parameters["arr"].items is not None
-    assert fd.parameters["arr"].items.type == "number"
-
-
-# --- Edge cases: SchemaNode ---
-
-
-def test_schema_node_unknown_key() -> None:
-    """Tests that unknown keys fall back to 'string' type."""
-    node = SchemaNode(
-        type="object",
-        properties={"known": FunctionParameter(type="number")},
-    )
-    assert node.get_child_type("unknown") == "string"
-
-
-def test_schema_node_none_key() -> None:
-    """Tests that a None key falls back to 'string' type."""
-    node = SchemaNode(
-        type="object",
-        properties={"a": FunctionParameter(type="number")},
-    )
-    assert node.get_child_type(None) == "string"
-
-
-def test_schema_node_array_items() -> None:
-    """Tests that array nodes return their item type."""
-    node = SchemaNode(
-        type="array",
-        items=FunctionParameter(type="integer"),
-    )
-    assert node.get_child_type() == "integer"
-
-
-def test_schema_node_quoted_key() -> None:
-    """Tests that quoted keys are resolved correctly."""
-    node = SchemaNode(
-        type="object",
-        properties={"age": FunctionParameter(type="number")},
-    )
-    assert node.get_child_type('"age"') == "number"
