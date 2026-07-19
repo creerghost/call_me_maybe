@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 import pytest
 
 import numpy as np

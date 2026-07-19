@@ -4,7 +4,7 @@ from .masker import ValueMasker
 from .visualizer import Visualizer
 from .llm import LLM
 import numpy as np
-from typing import Callable
+from typing import Callable, Any
 
 
 class JSONBuilder(BaseModel):
@@ -60,12 +60,26 @@ class JSONBuilder(BaseModel):
 
             self._fast_forward(text=f'"{key}": ', phase="structure")
 
-            decoders = {
-                "string": lambda: (
-                    self._fast_forward('"', phase="structure"),
-                    self._decode_str(phase=phase_name),
-                    self._fast_forward('"', phase="structure")
-                ),
+            def decode_string() -> None:
+                self._fast_forward('"', phase="structure")
+                self._decode_str(phase=phase_name)
+                self._fast_forward('"', phase="structure")
+                
+            def decode_enum() -> None:
+                self._fast_forward('"', phase="structure")
+                if param_schema.options:
+                    self._decode_enum(param_schema.options, phase=phase_name)
+                else:
+                    self._decode_str(phase=phase_name)
+                self._fast_forward('"', phase="structure")
+                
+            def decode_object() -> None:
+                self._fast_forward('{', phase="structure")
+                self._decode_properties(param_schema.properties or {})
+                self._fast_forward('}', phase="structure")
+
+            decoders: dict[str, Any] = {
+                "string": decode_string,
                 "boolean": lambda: self._decode_bool(phase=phase_name),
                 "bool": lambda: self._decode_bool(phase=phase_name),
                 "number": lambda: self._decode_number(
@@ -76,18 +90,8 @@ class JSONBuilder(BaseModel):
                     allowed_chars="}" if i == len(keys)-1 else ",",
                     phase=phase_name
                     ),
-                "enum": lambda: (
-                    self._fast_forward('"', phase="structure"),
-                    self._decode_enum(param_schema.options, phase=phase_name)
-                    if param_schema.options else
-                    self._decode_str(phase=phase_name),
-                    self._fast_forward('"', phase="structure")
-                ),
-                "object": lambda: (
-                    self._fast_forward('{', phase="structure"),
-                    self._decode_properties(param_schema.properties or {}),
-                    self._fast_forward('}', phase="structure")
-                )
+                "enum": decode_enum,
+                "object": decode_object
             }
 
             if param_schema.type not in decoders:
@@ -214,7 +218,7 @@ class JSONBuilder(BaseModel):
             phase=phase
         )
 
-    def _decode_number(self, allowed_chars, phase: str) -> str:
+    def _decode_number(self, allowed_chars: str, phase: str) -> str:
         boosts = {c: 10.0 for c in allowed_chars}
         return self._run_decode_loop(
             get_valid_ids=lambda val: self.masker.get_number_tokens(
