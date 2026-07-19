@@ -1,4 +1,4 @@
-from .models import GenerationEvent
+from .models import GenerationEvent, FunctionDefinition, FunctionParameter
 from pydantic import BaseModel, PrivateAttr, ConfigDict
 from .masker import ValueMasker
 from .visualizer import Visualizer
@@ -17,6 +17,91 @@ class JSONBuilder(BaseModel):
     _context_ids: list[int] = PrivateAttr(default_factory=list)
     _generated_text: str = PrivateAttr(default="")
     _user_question: str = PrivateAttr(default="")
+
+    def decode_function_call(
+        self, fn_defs: list[FunctionDefinition],
+        prompt_ids: list[int],
+        user_question: str
+    ) -> str:
+        self._context_ids = list(prompt_ids)
+        self._user_question = user_question
+        self._generated_text = ""
+
+        self._fast_forward('{"name": "', phase="structure")
+
+        allowed_names = [f'{fn.name}' for fn in fn_defs]
+        fn_name = self._decode_enum(options=allowed_names, phase="name")
+        # finds first matching fn definition
+        matched_fn = next(fn for fn in fn_defs if fn.name == fn_name)
+        params = matched_fn.parameters.properties \
+            if matched_fn.parameters.properties else {}
+
+        if not params:
+            self._fast_forward(text='"}', phase="structure")
+            return self._generated_text
+
+        self._fast_forward(text='", "parameters": {', phase="structure")
+
+        self._decode_properties(properties=params)
+        return self._generated_text
+
+    def _decode_properties(
+        self,
+        properties: dict[str, FunctionParameter]
+    ) -> None:
+        # recursive method which can handle nested jsons
+        if not properties:
+            return
+
+        keys = list(properties.keys())
+        for i, key in enumerate(keys):
+            param_schema = properties[key]
+            phase_name = f"param:{key}"
+
+            self._fast_forward(text=f'"{key}": ', phase="structure")
+
+            decoders = {
+                "string": lambda: (
+                    self._fast_forward('"', phase="structure"),
+                    self._decode_str(phase=phase_name)
+                ),
+                "boolean": lambda: self._decode_bool(phase=phase_name),
+                "bool": lambda: self._decode_bool(phase=phase_name),
+                "number": lambda: self._decode_number(
+                    allowed_chars="}" if i == len(keys)-1 else ",",
+                    phase=phase_name
+                    ),
+                "integer": lambda: self._decode_number(
+                    allowed_chars="}" if i == len(keys)-1 else ",",
+                    phase=phase_name
+                    ),
+                "enum": lambda: (
+                    self._fast_forward('"', phase="structure"),
+                    self._decode_enum(
+                        param_schema.options or [],
+                        phase=phase_name
+                    ),
+                    self._fast_forward('"', phase="structure")
+                ),
+                "object": lambda: (
+                    self._fast_forward('{', phase="structure"),
+                    self._decode_properties(param_schema.properties or {}),
+                    self._fast_forward('}', phase="structure")
+                )
+            }
+
+            if param_schema.type not in decoders:
+                raise ValueError(f"Unsupported type: {param_schema.type}")
+
+            # calling lambda funciton
+            decoders[param_schema.type]()
+
+            # inject commas/closing braces
+            if param_schema.type not in ("number", "integer"):
+                self._fast_forward(
+                    text=', ' if i < len(keys) - 1 else '}',
+                    phase="structure"
+                )
 
     def _fast_forward(self, text: str, phase: str) -> None:
         # A case when we don't need llm
@@ -99,7 +184,7 @@ class JSONBuilder(BaseModel):
             get_valid_ids=lambda val: self.masker.get_boolean_tokens(
                 val
             ),
-            is_done=lambda val, latest_token: val.strip in [
+            is_done=lambda val, latest_token: val.strip() in [
                 "true", "false"
             ],
             phase=phase

@@ -42,15 +42,12 @@
     "prompt": "My name is Arthur. Is my name Arthur?"
   },
   {
-    "prompt": "Sort the following numbers: 5, 2, 9, 1, 7"
-  },
-  {
     "prompt": "Update the user John Doe, who is 30 years old."
   },
   {
     "prompt": "Get the status for the pending operation."
   },
   {
-    "prompt": "Create a deeply nested structure with level1 having level2_arr with an object containing level4_arr with numbers 1, 2, 3 and level4_str 'hello'."
+    "prompt": "Create a deeply nested structure with level1 having level2_obj containing level3_obj which has level4_obj with level5_num 42 and level4_str 'hello'."
   }
 ]

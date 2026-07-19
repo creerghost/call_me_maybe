@@ -14,7 +14,6 @@ class FunctionParameter(BaseModel):
         "boolean",
         "bool",
         "object",
-        "array",
         "enum",
     ]
     properties: dict[str, FunctionParameter] | None = None
