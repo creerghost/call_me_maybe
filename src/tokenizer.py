@@ -31,7 +31,7 @@ class BPETokenizer(BaseModel):
     _byte_encoder: dict[int, str] = PrivateAttr(default_factory=dict)
     _byte_decoder: dict[str, int] = PrivateAttr(default_factory=dict)
     _cache: dict[str, str] = PrivateAttr(default_factory=dict)
-    _pat: re.Pattern = re.compile(
+    _pat: re.Pattern[str] = re.compile(
             r"""'s|'t|'re|'ve|'m|'ll|'d| ?\w+| ?[^\s\w]+|\s+(?!\S)|\s+""")
 
     @property

@@ -46,23 +46,10 @@ class Visualizer(BaseModel):
         )
         dashboard += f"{str(event.input_ids[:10])}...\n\n"
 
-        path = "Root"
-        if event.context and "stack" in event.context:
-            stack = event.context["stack"]
-            current_key = event.context.get("current_key")
-            if len(stack) > 0:
-                current_node = stack[-1]
-                val_type = current_node.get_child_type(current_key)
-                if current_key:
-                    path = f"{current_key.strip('"')} ({val_type})"
-                else:
-                    path = f"Object ({val_type})"
-
         dashboard += (
-            f"\033[92mCurrent State:\033[0m {event.state.name} "
-            f"(was {event.old_state.name})\n"
+            f"\033[92mCurrent Phase:\033[0m {event.current_phase} "
+            f"(Source: {event.source})\n"
         )
-        dashboard += f"\033[92mContext Path:\033[0m {path}\n"
         dashboard += (f"\033[92mSpeed:\033[0m {inst_tps:.1f} "
                       f"tokens/sec (Avg: {avg_tps:.1f} tokens/sec)\n\n")
 

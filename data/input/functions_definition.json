@@ -96,24 +96,6 @@
     }
   },
   {
-    "name": "fn_sort_numbers",
-    "description": "Sort an array of numbers.",
-    "parameters": {
-      "arr": {
-        "type": "array",
-        "items": {
-          "type": "number"
-        }
-      }
-    },
-    "returns": {
-      "type": "array",
-      "items": {
-        "type": "number"
-      }
-    }
-  },
-  {
     "name": "fn_update_user",
     "description": "Update user information.",
     "parameters": {
@@ -152,19 +134,23 @@
       "level1": {
         "type": "object",
         "properties": {
-          "level2_arr": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "level4_arr": {
-                  "type": "array",
-                  "items": {
-                    "type": "number"
+          "level2_obj": {
+            "type": "object",
+            "properties": {
+              "level3_obj": {
+                "type": "object",
+                "properties": {
+                  "level4_obj": {
+                    "type": "object",
+                    "properties": {
+                      "level5_num": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "level4_str": {
+                    "type": "string"
                   }
-                },
-                "level4_str": {
-                  "type": "string"
                 }
               }
             }

@@ -103,46 +103,46 @@ class LLM(BaseModel):
         """
         return self._model.get_logits_from_input_ids(input_ids)
 
-    def encode(self, text: str) -> list[int] | Any:
-        """Encodes text into token IDs, automatically applying chat templates
-        if available.
+    def encode(
+        self, text: str, apply_chat_template: bool = True
+    ) -> list[int] | Any:
+        """Encodes text into token IDs, optionally applying chat templates.
 
         Args:
             text (str): The raw string prompt to encode.
+            apply_chat_template (bool): Whether to wrap text in chat tags.
 
         Returns:
             list[int] | Any: A flat list of integer token IDs.
         """
-        if self.use_tokenizer:
-            # Manually wrap the text in Qwen's ChatML special tokens
-            # 151644 = <|im_start|>, 151645 = <|im_end|>
-            # 872 = "user", 198 = "\n", 77091 = "assistant"
+        if apply_chat_template:
+            if self.use_tokenizer:
+                prompt_ids = self._custom_tokenizer.encode(text)
+                return (
+                    [151644, 872, 198]
+                    + prompt_ids
+                    + [151645, 198, 151644, 77091, 198]
+                )
+            tokenizer = self._model._tokenizer
+            if hasattr(tokenizer, "chat_template") and tokenizer.chat_template:
+                messages = [{"role": "user", "content": text}]
+                res = tokenizer.apply_chat_template(
+                    messages, add_generation_prompt=True
+                )
+                if hasattr(res, "get") and res.get("input_ids") is not None:
+                    res = res["input_ids"]
+                if hasattr(res, "tolist"):
+                    res = res.tolist()
+                if (
+                    isinstance(res, list)
+                    and len(res) > 0
+                    and isinstance(res[0], list)
+                ):
+                    res = res[0]
+                return res
 
-            # for different modules it's whatever but in this project
-            # I will not handle this, it's quite complicated
-            prompt_ids = self._custom_tokenizer.encode(text)
-            return (
-                [151644, 872, 198]
-                + prompt_ids
-                + [151645, 198, 151644, 77091, 198]
-            )
-        tokenizer = self._model._tokenizer
-        if hasattr(tokenizer, "chat_template") and tokenizer.chat_template:
-            messages = [{"role": "user", "content": text}]
-            res = tokenizer.apply_chat_template(
-                messages, add_generation_prompt=True
-            )
-            if hasattr(res, "get") and res.get("input_ids") is not None:
-                res = res["input_ids"]
-            if hasattr(res, "tolist"):
-                res = res.tolist()
-            if (
-                isinstance(res, list)
-                and len(res) > 0
-                and isinstance(res[0], list)
-            ):
-                res = res[0]
-            return res
+        if self.use_tokenizer:
+            return self._custom_tokenizer.encode(text)
         return self._model.encode(text).squeeze().tolist()
 
     def decode(self, tokens: list[int]) -> str:

@@ -1,10 +1,9 @@
+from src.tokenizer import BPETokenizer
+from llm_sdk import Small_LLM_Model  # type: ignore
 import sys
 import os
 import pytest
 from typing import Tuple, Any
-from llm_sdk import Small_LLM_Model
-from src.tokenizer import BPETokenizer
-
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append("llm_sdk")
