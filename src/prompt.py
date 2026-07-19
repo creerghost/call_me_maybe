@@ -1,8 +1,9 @@
 from .models import FunctionDefinition
 from .catch import PromptConstructionError
+from pydantic import BaseModel
 
 
-class PromptConstructor:
+class PromptConstructor(BaseModel):
     """Constructs dynamic templates for LLM instructions."""
 
     @staticmethod

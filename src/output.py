@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
 from .models import FunctionCallResult
+from pydantic import BaseModel
 
 
-class OutputWriter:
+class OutputWriter(BaseModel):
     """Handles writing the final structured JSON results."""
 
     @staticmethod
