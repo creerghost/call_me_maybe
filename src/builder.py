@@ -33,8 +33,7 @@ class JSONBuilder(BaseModel):
         fn_name = self._decode_enum(options=allowed_names, phase="name")
         # finds first matching fn definition
         matched_fn = next(fn for fn in fn_defs if fn.name == fn_name)
-        params = matched_fn.parameters.properties \
-            if matched_fn.parameters.properties else {}
+        params = matched_fn.parameters
 
         if not params:
             self._fast_forward(text='"}', phase="structure")
@@ -43,6 +42,7 @@ class JSONBuilder(BaseModel):
         self._fast_forward(text='", "parameters": {', phase="structure")
 
         self._decode_properties(properties=params)
+        self._fast_forward(text='}}', phase="structure")
         return self._generated_text
 
     def _decode_properties(
@@ -63,7 +63,8 @@ class JSONBuilder(BaseModel):
             decoders = {
                 "string": lambda: (
                     self._fast_forward('"', phase="structure"),
-                    self._decode_str(phase=phase_name)
+                    self._decode_str(phase=phase_name),
+                    self._fast_forward('"', phase="structure")
                 ),
                 "boolean": lambda: self._decode_bool(phase=phase_name),
                 "bool": lambda: self._decode_bool(phase=phase_name),
@@ -77,10 +78,9 @@ class JSONBuilder(BaseModel):
                     ),
                 "enum": lambda: (
                     self._fast_forward('"', phase="structure"),
-                    self._decode_enum(
-                        param_schema.options or [],
-                        phase=phase_name
-                    ),
+                    self._decode_enum(param_schema.options, phase=phase_name)
+                    if param_schema.options else
+                    self._decode_str(phase=phase_name),
                     self._fast_forward('"', phase="structure")
                 ),
                 "object": lambda: (
@@ -96,16 +96,13 @@ class JSONBuilder(BaseModel):
             # calling lambda funciton
             decoders[param_schema.type]()
 
-            # inject commas/closing braces
-            if param_schema.type not in ("number", "integer"):
-                self._fast_forward(
-                    text=', ' if i < len(keys) - 1 else '}',
-                    phase="structure"
-                )
+            # inject commas
+            if i < len(keys) - 1:
+                self._fast_forward(text=', ', phase="structure")
 
     def _fast_forward(self, text: str, phase: str) -> None:
         # A case when we don't need llm
-        token_ids = self.llm.encode(text)
+        token_ids = self.llm.encode(text, apply_chat_template=False)
         for i in token_ids:
             self._context_ids.append(i)
             token_str = self.llm.decode([i])
@@ -128,21 +125,45 @@ class JSONBuilder(BaseModel):
     def _run_decode_loop(
         self,
         get_valid_ids: Callable[[str], list[int]],
-        is_done: Callable[[str, str], bool],
-        phase: str
+        is_done: Callable[[str, str], tuple[bool, bool]],
+        phase: str,
+        logit_boosts: dict[str, float] | None = None
     ) -> str:
         current_value = ""
+        token_count = 0
+
+        # Precompute boosted token IDs if provided
+        boost_tokens: dict[int, float] = {}
+        if logit_boosts:
+            for token_str_to_boost, boost_val in logit_boosts.items():
+                for vocab_id, vocab_str in self.llm.id2token.items():
+                    if token_str_to_boost in vocab_str:
+                        boost_tokens[vocab_id] = boost_val
+
         while True:
             logits = self.llm.get_logits(self._context_ids)
             valid_ids = get_valid_ids(current_value)
 
             masked_logits = np.full(len(logits), -np.inf)
             masked_logits[valid_ids] = np.array(logits)[valid_ids]
+
+            # Apply logit boosting
+            if logit_boosts and token_count > 3:
+                for vid, boost_val in boost_tokens.items():
+                    if masked_logits[vid] > float("-inf"):
+                        masked_logits[vid] += boost_val
+
             next_token_id = int(np.argmax(masked_logits))
 
             token_str = self.llm.decode([next_token_id])
+            done, keep_token = is_done(current_value, token_str)
+            if done and not keep_token:
+                break
+
+            current_value += token_str
             self._context_ids.append(next_token_id)
             self._generated_text += token_str
+            token_count += 1
             if self.visualizer:
                 event = GenerationEvent(
                     user_question=self._user_question,
@@ -158,7 +179,7 @@ class JSONBuilder(BaseModel):
                 )
                 self.visualizer.render(event)
 
-            if is_done(current_value, token_str):
+            if done:
                 break
 
         return current_value.strip()
@@ -168,15 +189,18 @@ class JSONBuilder(BaseModel):
             get_valid_ids=lambda val: self.masker.get_enum_tokens(
                 options, val
             ),
-            is_done=lambda val, latest_token: val.strip() in options,
+            is_done=lambda val, latest_token: (
+                (val + latest_token).strip() in options, True
+            ),
             phase=phase
         )
 
     def _decode_str(self, phase: str) -> str:
         return self._run_decode_loop(
             get_valid_ids=lambda val: self.masker.get_string_tokens(),
-            is_done=lambda val, latest_token: '"' in latest_token,
-            phase=phase
+            is_done=lambda val, latest_token: ('"' in latest_token, False),
+            phase=phase,
+            logit_boosts={'"': 5.0}
         )
 
     def _decode_bool(self, phase: str) -> str:
@@ -184,21 +208,23 @@ class JSONBuilder(BaseModel):
             get_valid_ids=lambda val: self.masker.get_boolean_tokens(
                 val
             ),
-            is_done=lambda val, latest_token: val.strip() in [
-                "true", "false"
-            ],
+            is_done=lambda val, latest_token: (
+                (val + latest_token).strip() in ["true", "false"], True
+            ),
             phase=phase
         )
 
     def _decode_number(self, allowed_chars, phase: str) -> str:
+        boosts = {c: 10.0 for c in allowed_chars}
         return self._run_decode_loop(
             get_valid_ids=lambda val: self.masker.get_number_tokens(
                 is_empty_prefix=(val.strip() == ""),
                 has_digits=any(c.isdigit() for c in val),
                 allowed_chars=allowed_chars
             ),
-            is_done=lambda val, latest_token: any(
-                c in allowed_chars for c in latest_token
+            is_done=lambda val, latest_token: (
+                any(c in allowed_chars for c in latest_token), False
             ),
-            phase=phase
+            phase=phase,
+            logit_boosts=boosts
         )

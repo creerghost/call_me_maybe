@@ -2,7 +2,8 @@ import argparse
 import json
 
 from .catch import catch
-from .decoder import ConstrainedDecoder
+from .builder import JSONBuilder
+from .masker import ValueMasker
 from .llm import LLM
 from .loader import Loader
 from .models import FunctionCallResult, TestPrompt
@@ -58,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def generate_result(
-    decoder: ConstrainedDecoder,
+    builder: JSONBuilder,
     loader: Loader,
     test_prompt: TestPrompt,
     visualize: bool,
@@ -74,27 +75,28 @@ def generate_result(
     Returns:
         FunctionCallResult: A parsed, validated Pydantic model of the output.
     """
-    prompt = PromptConstructor.build_prompt(loader.fn_defs, test_prompt.prompt)
+    prompt_str = PromptConstructor.build_prompt(
+        loader.fn_defs, test_prompt.prompt
+        )
+    prompt_ids = builder.llm.encode(prompt_str)
 
-    visualizer = Visualizer(id2token=decoder.llm.id2token) \
+    visualizer = Visualizer(id2token=builder.llm.id2token) \
         if visualize else None
 
-    generated_tokens = []
+    builder.visualizer = visualizer
 
-    for event in decoder.generate(
-        prompt, test_prompt.prompt, loader.fn_defs
-    ):
-        if visualizer:
-            visualizer.render(event)
-        generated_tokens.append(event.next_token_id)
+    generated_text = builder.decode_function_call(
+        fn_defs=loader.fn_defs,
+        prompt_ids=prompt_ids,
+        user_question=test_prompt.prompt
+    )
 
-    generated_text = decoder.llm.decode(generated_tokens)
     loads = json.loads(generated_text)
 
     return FunctionCallResult(
         prompt=test_prompt.prompt,
         name=loads["name"],
-        parameters=loads["parameters"],
+        parameters=loads.get("parameters", {}),
     )
 
 
@@ -115,7 +117,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
         hf_model=args.model,
         use_tokenizer=args.tokenizer,
     )
-    decoder = ConstrainedDecoder(llm)
+    masker = ValueMasker(llm=llm)
+    builder = JSONBuilder(llm=llm, masker=masker)
 
     if args.interactive:
         print("\n=== Interactive Mode ===")
@@ -127,7 +130,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                     break
                 test_prompt = TestPrompt(prompt=user_input)
                 res = generate_result(
-                    decoder, loader, test_prompt, args.visual
+                    builder, loader, test_prompt, args.visual
                 )
                 print(f"\nResult: {res.model_dump_json(indent=2)}")
             except (EOFError, KeyboardInterrupt):
@@ -136,7 +139,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     else:
         results = []
         for i, test_prompt in enumerate(loader.test_prompts):
-            res = generate_result(decoder, loader, test_prompt, args.visual)
+            res = generate_result(builder, loader, test_prompt, args.visual)
             results.append(res)
             OutputWriter.write_output(results, args.output)
 
