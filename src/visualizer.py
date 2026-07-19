@@ -2,17 +2,17 @@ import time
 from typing import Optional
 import numpy as np
 from .models import GenerationEvent
+from pydantic import ConfigDict, BaseModel, PrivateAttr
 
 
-class Visualizer:
-    """Renders a real-time terminal dashboard tracking generation metrics."""
+class Visualizer(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __init__(self, id2token: dict[int, str]):
-        """Initializes the instance."""
-        self.start_time: Optional[float] = None
-        self.last_time: Optional[float] = None
-        self.token_count = 0
-        self.id2token = id2token
+    id2token: dict[int, str]
+
+    _start_time: Optional[float] = PrivateAttr(default=None)
+    _last_time: Optional[float] = PrivateAttr(default=None)
+    _token_count: int = PrivateAttr(default=0)
 
     def render(self, event: GenerationEvent) -> None:
         """Renders the current state of generation to the terminal.
@@ -22,21 +22,21 @@ class Visualizer:
                 containing all metrics.
         """
         now = time.time()
-        if self.start_time is None:
-            self.start_time = now
-            self.last_time = now
+        if self._start_time is None:
+            self._start_time = now
+            self._last_time = now
 
-        self.token_count += 1
-        assert self.start_time is not None
-        assert self.last_time is not None
+        self._token_count += 1
+        assert self._start_time is not None
+        assert self._last_time is not None
 
-        elapsed_total = now - self.start_time
-        avg_tps = self.token_count / elapsed_total \
+        elapsed_total = now - self._start_time
+        avg_tps = self._token_count / elapsed_total \
             if elapsed_total > 0 else 0.0
 
-        elapsed_step = now - self.last_time
+        elapsed_step = now - self._last_time
         inst_tps = 1.0 / elapsed_step if elapsed_step > 0 else 0.0
-        self.last_time = now
+        self._last_time = now
 
         dashboard = "\033[2J\033[H"  # clear screen & cursor home
         dashboard += "\033[96m=== Constrained JSON Decoder ===\033[0m\n\n"
@@ -63,7 +63,8 @@ class Visualizer:
             f"(was {event.old_state.name})\n"
         )
         dashboard += f"\033[92mContext Path:\033[0m {path}\n"
-        dashboard += f"\033[92mSpeed:\033[0m {inst_tps:.1f} tokens/sec (Avg: {avg_tps:.1f} tokens/sec)\n\n"
+        dashboard += (f"\033[92mSpeed:\033[0m {inst_tps:.1f} "
+                      f"tokens/sec (Avg: {avg_tps:.1f} tokens/sec)\n\n")
 
         if event.fast_forwarded:
             dashboard += (
