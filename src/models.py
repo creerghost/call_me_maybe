@@ -1,7 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, model_validator, ConfigDict
 from typing import Any, Literal, Self, Optional
-from .fsm import JSONState
 
 
 class FunctionParameter(BaseModel):
@@ -82,45 +81,17 @@ class FunctionCallResult(BaseModel):
     parameters: dict[str, Any]
 
 
-class SchemaNode(BaseModel):
-    """Represents a node in the nested JSON schema being generated."""
-
-    type: Literal[
-        "object", "array", "string", "number", "integer", "boolean", "enum"
-    ]
-    options: list[str] | None = None  # for enums (like fn names)
-    properties: dict[str, FunctionParameter] | None = None
-    items: FunctionParameter | None = None
-    remaining_keys: set[str] | None = None  # tracks which keys we havent seen
-
-    def get_child_type(self, key: str | None = None) -> str:
-        """Returns the type of the current value being parsed."""
-        if self.type == "object":
-            val_schema = None
-            if self.properties and key:
-                val_schema = self.properties.get(key)
-                # nested schema properties use keys without quotes and
-                # val_schema becomes None. -> decoder treats everything as
-                # a string.
-                if val_schema is None:
-                    val_schema = self.properties.get(key.strip('"'))
-        else:
-            val_schema = self.items
-        return val_schema.type if val_schema else "string"
-
-
 class GenerationEvent(BaseModel):
     """Event payload emitted after every single token is generated."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
     user_question: str
     input_ids: list[int]
-    state: JSONState
-    old_state: JSONState
+    source: Literal["hardcoded", "llm"]
+    current_phase: str  # e.g. "name", "param:a", "structure"
     fast_forwarded: bool
     valid_ids: list[int]
     token_str: str
     next_token_id: int
     full_json_string: str
-    context: dict[str, Any]
     logits: Optional[list[float]] = None

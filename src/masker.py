@@ -1,89 +1,47 @@
+from pydantic import BaseModel, ConfigDict, PrivateAttr
 from typing import Any, cast
 from functools import lru_cache
 import numpy as np
-from .fsm import JSONState
 from .llm import LLM
 
 
-class TokenMasker:
-    """Filters valid tokens based on JSON state and schemas."""
+class ValueMasker(BaseModel):
+    """Filters valid tokens based on data types for constrained decoding."""
 
-    def __init__(self, llm: LLM) -> None:
-        """Initializes the instance."""
-        self.llm = llm
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-        self.clean_tokens = [
-            (s.replace("Ġ", " "), id) for s, id in llm.token2id.items()
+    llm: LLM
+
+    _clean_tokens: list[tuple[str, int]] = PrivateAttr(default_factory=list)
+    _token_strs: Any = PrivateAttr(default_factory=list)
+    _stripped_strs: Any = PrivateAttr(default_factory=list)
+    _stop_token_ids: set[int] = PrivateAttr(default_factory=set)
+    _quote_ids: list[int] = PrivateAttr(default_factory=list)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Precomputes token strings and masks."""
+        self._clean_tokens = [
+            (s.replace("Ġ", " "), id) for s, id in self.llm.token2id.items()
         ]
 
-        # precompute token strings and stop tokens to avoid looping
-        self.token_strs = self.llm.token_strings.astype(str)
-        self.stripped_strs = np.char.lstrip(self.token_strs)
+        self._token_strs = self.llm.token_strings.astype(str)
+        self._stripped_strs = np.char.lstrip(self._token_strs)
 
-        self.stop_token_ids = {
+        self._stop_token_ids = {
             id
-            for clean, id in self.clean_tokens
+            for clean, id in self._clean_tokens
             if clean.strip() in (",", "}", "]")
         }
 
-        self.quote_ids = [
-            id for clean, id in self.clean_tokens if clean.strip() == '"'
+        self._quote_ids = [
+            id for clean, id in self._clean_tokens if clean.strip() == '"'
         ]
 
-        S = JSONState
-        self.state_handlers = {
-            S.EXPECT_OBJECT_START: lambda p, c: self._get_tokens_for_string(
-                "{", p
-            ),
-            S.EXPECT_ARRAY_START: lambda p, c: self._get_tokens_for_string(
-                "[", p
-            ),
-            S.EXPECT_COLON: lambda p, c: self._get_tokens_for_string(":", p),
-            S.EXPECT_KEY: lambda p, c: self._get_tokens_for_options(
-                list(c["stack"][-1].remaining_keys) if c["stack"] else [], p
-            ),
-            S.EXPECT_COMMA_OR_END: lambda p, c: (
-                self._get_tokens_for_comma_or_end(p, c)
-            ),
-            S.EXPECT_VALUE: lambda p, c: self._get_tokens_for_value(p, c),
-        }
-
-    def get_valid_tokens_for_state(
-        self, state: JSONState, current_prefix: str, context: dict[str, Any]
-    ) -> list[int]:
-        """Calculates which tokens are valid given the current JSON parsing
-        state.
-
-        Args:
-            state (JSONState): The current state of the FSM.
-            current_prefix (str): The accumulated string for the
-                current token being processed.
-            context (dict[str, Any]): Generation context including the
-                node stack.
-
-        Returns:
-            list[int]: A list of allowed token IDs from the LLM's
-                vocabulary.
-        """
-        handler = self.state_handlers.get(state)
-        if handler:
-            return handler(current_prefix, context)
-        return []
-
     @lru_cache(maxsize=1024)
-    def _get_tokens_for_string(
+    def get_tokens_for_string(
         self, expected: str, curr_prefix: str
     ) -> list[int]:
-        """Finds all tokens that match a specific exact string prefix.
-
-        Args:
-            expected (str): The exact string we are trying to enforce.
-            curr_prefix (str): What has been generated so far for
-                this state.
-
-        Returns:
-            list[int]: Token IDs that legally continue the string.
-        """
+        """Finds all tokens that match a specific exact string prefix."""
         curr_prefix = curr_prefix.lstrip()
         if curr_prefix == expected or not expected.startswith(curr_prefix):
             return []
@@ -94,90 +52,45 @@ class TokenMasker:
             mask = np.array(
                 [
                     remainder.startswith(s) and s != ""
-                    for s in self.stripped_strs
+                    for s in self._stripped_strs
                 ],
                 dtype=bool,
             )
         else:
             mask = np.array(
-                [remainder.startswith(s) and s != "" for s in self.token_strs],
+                [remainder.startswith(s) and s != "" for s in self._token_strs],
                 dtype=bool,
             )
         return cast(list[int], self.llm.token_ids[mask].tolist())
 
-    def _get_tokens_for_options(
+    def get_enum_tokens(
         self, options: list[str], current_prefix: str
     ) -> list[int]:
-        """Finds tokens that match any of the provided string options.
-
-        Args:
-            options (list[str]): The valid string choices
-                (e.g., dictionary keys).
-            current_prefix (str): The currently generated prefix.
-
-        Returns:
-            list[int]: Allowed token IDs.
-        """
+        """Finds tokens that match any of the provided string options."""
         valid_ids = set()
         current_prefix = current_prefix.strip()
 
         for expected in options:
             if expected.startswith(current_prefix):
-                tokens = self._get_tokens_for_string(expected, current_prefix)
+                tokens = self.get_tokens_for_string(expected, current_prefix)
                 valid_ids.update(tokens)
 
         return list(valid_ids)
 
-    def _get_tokens_for_comma_or_end(
-        self, current_prefix: str, context: dict[str, Any]
-    ) -> list[int]:
-        """Finds tokens representing either a comma or closing bracket/brace.
-
-        Args:
-            current_prefix (str): The currently generated prefix.
-            context (dict[str, Any]): Context stack used to determine
-                if we are in an array or object.
-
-        Returns:
-            list[int]: Allowed token IDs.
-        """
-        stack = context["stack"]
-        if not stack:
-            return []
-
-        current_node = stack[-1]
-        options = []
-        if current_node.type == "object":
-            if not current_node.remaining_keys:
-                options.append("}")
-            else:
-                options.append(",")
-        else:
-            options.append("]")
-            # For array, we could check if items are bounded,
-            # but usually they are open-ended list of items.
-            options.append(",")
-
-        return self._get_tokens_for_options(options, current_prefix)
+    def get_boolean_tokens(self, current_prefix: str) -> list[int]:
+        """Finds tokens valid for a boolean value."""
+        return self.get_enum_tokens(["true", "false"], current_prefix)
 
     @lru_cache(maxsize=1024)
-    def _get_string_tokens(self) -> list[int]:
-        # Ban tokens containing quote to prevent FSM spillover
-        """Computes the valid tokens that can be emitted inside a JSON string
-        value.
+    def get_string_tokens(self) -> list[int]:
+        """Computes valid tokens for a JSON string value (no quotes)."""
+        no_quote_mask = np.char.find(self._token_strs, '"') == -1
+        exact_quote_mask = np.char.strip(self._token_strs) == '"'
 
-        Returns:
-            list[int]: Token IDs that do not contain quotes or
-                newlines.
-        """
-        no_quote_mask = np.char.find(self.token_strs, '"') == -1
-        # Explicitly allow exact quote to close the string
-        exact_quote_mask = np.char.strip(self.token_strs) == '"'
-
-        no_newline_mask = (np.char.find(self.token_strs, "\n") == -1) & (
-            np.char.find(self.token_strs, "Ċ") == -1
+        no_newline_mask = (np.char.find(self._token_strs, "\n") == -1) & (
+            np.char.find(self._token_strs, "Ċ") == -1
         )
-        nonempty_mask = self.token_strs != ""
+        nonempty_mask = self._token_strs != ""
 
         valid_mask = (
             (no_quote_mask | exact_quote_mask)
@@ -187,24 +100,10 @@ class TokenMasker:
         return cast(list[int], self.llm.token_ids[valid_mask].tolist())
 
     @lru_cache(maxsize=1024)
-    def _get_number_tokens(
+    def get_number_tokens(
         self, is_empty_prefix: bool, has_digits: bool, allowed_chars: str
     ) -> list[int]:
-        """Computes the valid tokens that can be emitted inside a JSON number
-        value.
-
-        Args:
-            is_empty_prefix (bool): True if no number characters
-                have been emitted yet.
-            has_digits (bool): True if digits have already been
-                emitted.
-            allowed_chars (str): Characters allowed to terminate
-                the number (e.g., ',}').
-
-        Returns:
-            list[int]: Allowed token IDs for a valid numeric value.
-        """
-
+        """Computes valid tokens for a JSON number value."""
         def is_valid_num(s: str) -> bool:
             if is_empty_prefix:
                 s = s.lstrip()
@@ -218,60 +117,5 @@ class TokenMasker:
             )
 
         vec_is_valid = np.vectorize(is_valid_num, otypes=[bool])
-        mask = vec_is_valid(self.token_strs)
+        mask = vec_is_valid(self._token_strs)
         return cast(list[int], self.llm.token_ids[mask].tolist())
-
-    def _get_tokens_for_value(
-        self, current_prefix: str, context: dict[str, Any]
-    ) -> list[int]:
-        """Delegates token masking logic based on the schema type of the
-        current value.
-
-        Args:
-            current_prefix (str): The prefix of the value being generated.
-            context (dict[str, Any]): Context dict containing the stack
-                to identify the value type.
-
-        Returns:
-            list[int]: Allowed token IDs based on type constraints.
-        """
-        current_node = context["stack"][-1]
-
-        # get the schema for the current value we are parsing
-        val_type = current_node.get_child_type(context.get("current_key"))
-
-        if val_type == "string":
-            if current_prefix.strip() == "":
-                return self._get_tokens_for_string('"', current_prefix)
-            return self._get_string_tokens()
-
-        elif val_type == "enum":
-            if context.get("current_key") == '"name"':
-                options = context["allowed_funcs"]
-                return self._get_tokens_for_options(options, current_prefix)
-            else:
-                if current_prefix.strip() == "":
-                    return self._get_tokens_for_string('"', current_prefix)
-                return self._get_string_tokens()
-
-        elif val_type in ("number", "integer"):
-            if current_node.type == "object":
-                if not current_node.remaining_keys:
-                    allowed_chars = "}"
-                else:
-                    allowed_chars = ","
-            else:
-                allowed_chars = ",]"
-
-            return self._get_number_tokens(
-                current_prefix.strip() == "",
-                any(c.isdigit() for c in current_prefix),
-                allowed_chars,
-            )
-
-        elif val_type in ("boolean", "bool"):
-            return self._get_tokens_for_options(
-                ["true", "false"], current_prefix
-            )
-
-        return []
