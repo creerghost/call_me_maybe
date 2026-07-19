@@ -18,6 +18,9 @@ class ValueMasker(BaseModel):
     _stop_token_ids: set[int] = PrivateAttr(default_factory=set)
     _quote_ids: list[int] = PrivateAttr(default_factory=list)
 
+    def __hash__(self) -> int:
+        return id(self)
+
     def model_post_init(self, __context: Any) -> None:
         """Precomputes token strings and masks."""
         self._clean_tokens = [

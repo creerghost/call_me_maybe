@@ -18,6 +18,7 @@ class FunctionParameter(BaseModel):
     ]
     properties: dict[str, FunctionParameter] | None = None
     items: FunctionParameter | None = None
+    options: list[str] | None = None
 
 
 class FunctionDefinition(BaseModel):
