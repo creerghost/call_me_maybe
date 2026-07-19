@@ -108,7 +108,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
     loader = Loader(args.functions_definition, args.input)
 
     llm = LLM(
-        args.llm_path, args.llm_name, args.model, tokenizer=args.tokenizer
+        llm_path=args.llm_path,
+        llm_name=args.llm_name,
+        hf_model=args.model,
+        use_tokenizer=args.tokenizer,
     )
     decoder = ConstrainedDecoder(llm)
 
