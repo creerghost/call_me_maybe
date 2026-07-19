@@ -93,3 +93,27 @@ class JSONBuilder(BaseModel):
             is_done=lambda val, latest_token: '"' in latest_token,
             phase=phase
         )
+
+    def _decode_bool(self, phase: str) -> str:
+        return self._run_decode_loop(
+            get_valid_ids=lambda val: self.masker.get_boolean_tokens(
+                val
+            ),
+            is_done=lambda val, latest_token: val.strip in [
+                "true", "false"
+            ],
+            phase=phase
+        )
+
+    def _decode_number(self, allowed_chars, phase: str) -> str:
+        return self._run_decode_loop(
+            get_valid_ids=lambda val: self.masker.get_number_tokens(
+                is_empty_prefix=(val.strip() == ""),
+                has_digits=any(c.isdigit() for c in val),
+                allowed_chars=allowed_chars
+            ),
+            is_done=lambda val, latest_token: any(
+                c in allowed_chars for c in latest_token
+            ),
+            phase=phase
+        )
