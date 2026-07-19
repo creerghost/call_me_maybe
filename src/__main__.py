@@ -105,7 +105,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
         args (argparse.Namespace): The parsed command line arguments containing
             all file paths and execution flags.
     """
-    loader = Loader(args.functions_definition, args.input)
+    loader = Loader(fdef_name=args.functions_definition,
+                    fcall_name=args.input)
 
     llm = LLM(
         llm_path=args.llm_path,

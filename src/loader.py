@@ -1,58 +1,56 @@
 import json
-from pydantic import ValidationError
+from pydantic import ValidationError, BaseModel, PrivateAttr, ConfigDict
 from .models import FunctionDefinition, TestPrompt
 from .catch import LoaderError
+from typing import Any
 
 
-class Loader:
-    """Responsible for loading and validating input JSON files."""
+class Loader(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __init__(self, fdef_name: str, fcall_name: str | None = None) -> None:
-        """Initializes the Loader and parses the configuration files.
+    fdef_name: str
+    fcall_name: str | None = None
 
-        Args:
-            fdef_name (str): Path to the function definitions JSON file.
-            fcall_name (str | None): Path to the test prompts JSON file.
-        """
-        self.fn_defs: list[FunctionDefinition] = []
-        self.test_prompts: list[TestPrompt] = []
-        self._load(fdef_name, fcall_name)
+    _fn_defs: list[FunctionDefinition] = PrivateAttr(default_factory=list)
+    _test_prompts: list[TestPrompt] = PrivateAttr(default_factory=list)
 
-    def _load(self, fdef: str, fcall: str | None) -> None:
-        """Loads, parses, and validates the input JSON files.
+    def model_post_init(self, __context: Any) -> None:
+        self._load()
 
-        Args:
-            fdef (str): Path to the function definitions JSON file.
-            fcall (str | None): Path to the test prompts JSON file.
-
-        Raises:
-            LoaderError: If files are missing, malformed, or fail Pydantic
-            schema validation.
-        """
+    def _load(self) -> None:
         try:
-            with open(fdef, "r") as f:
+            with open(self.fdef_name, "r") as f:
                 json_defs = json.load(f)
-            self.fn_defs = [FunctionDefinition(**d) for d in json_defs]
-            if not self.fn_defs:
+            self._fn_defs = [FunctionDefinition(**d) for d in json_defs]
+            if not self._fn_defs:
                 raise LoaderError("Json is empty.")
 
         except FileNotFoundError:
-            raise LoaderError(f"File not found: {fdef}")
+            raise LoaderError(f"File not found: {self.fdef_name}")
         except json.JSONDecodeError as e:
-            raise LoaderError(f"Invalid JSON in {fdef}: {e}")
+            raise LoaderError(f"Invalid JSON in {self.fdef_name}: {e}")
         except ValidationError as e:
-            raise LoaderError(f"Schema mismatch in {fdef}:\n{e}")
+            raise LoaderError(f"Schema mismatch in {self.fdef_name}:\n{e}")
 
-        if fcall:
+        if self.fcall_name:
             try:
-                with open(fcall, "r") as f:
+                with open(self.fcall_name, "r") as f:
                     json_prompts = json.load(f)
-                self.test_prompts = [TestPrompt(**p) for p in json_prompts]
-                if not self.test_prompts:
+                self._test_prompts = [TestPrompt(**p) for p in json_prompts]
+                if not self._test_prompts:
                     raise LoaderError("Json is empty.")
             except FileNotFoundError:
-                raise LoaderError(f"File not found: {fcall}")
+                raise LoaderError(f"File not found: {self.fcall_name}")
             except json.JSONDecodeError as e:
-                raise LoaderError(f"Invalid JSON in {fcall}: {e}")
+                raise LoaderError(f"Invalid JSON in {self.fcall_name}: {e}")
             except ValidationError as e:
-                raise LoaderError(f"Schema mismatch in {fcall}:\n{e}")
+                raise LoaderError(f"Schema mismatch in "
+                                  f"{self.fcall_name}:\n{e}")
+
+    @property
+    def fn_defs(self) -> list[FunctionDefinition]:
+        return self._fn_defs
+
+    @property
+    def test_prompts(self) -> list[TestPrompt]:
+        return self._test_prompts
