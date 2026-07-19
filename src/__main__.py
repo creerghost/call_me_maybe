@@ -76,7 +76,8 @@ def generate_result(
     """
     prompt = PromptConstructor.build_prompt(loader.fn_defs, test_prompt.prompt)
 
-    visualizer = Visualizer(decoder.llm.id2token) if visualize else None
+    visualizer = Visualizer(id2token=decoder.llm.id2token) \
+        if visualize else None
 
     generated_tokens = []
 

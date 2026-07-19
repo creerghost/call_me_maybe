@@ -29,8 +29,8 @@ class LLM(BaseModel):
             from .tokenizer import BPETokenizer
 
             self._custom_tokenizer = BPETokenizer(
-                self._model.get_path_to_vocab_file(),
-                self._model.get_path_to_merges_file(),
+                vocab_file=self._model.get_path_to_vocab_file(),
+                merges_file=self._model.get_path_to_merges_file(),
             )
         self._load_vocab()
 
@@ -62,6 +62,10 @@ class LLM(BaseModel):
         self._token_ids = np.array(ids, dtype=np.int32)
 
     # Property accessors
+    @property
+    def model(self) -> Any:
+        return self._model
+
     @property
     def token2id(self) -> dict[str, int]:
         return self._token2id
