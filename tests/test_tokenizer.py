@@ -2,11 +2,12 @@ import sys
 import os
 import pytest
 from typing import Tuple, Any
+from llm_sdk import Small_LLM_Model
+from src.tokenizer import BPETokenizer
+
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append("llm_sdk")
-from llm_sdk import Small_LLM_Model  # type: ignore  # noqa: E402
-from src.tokenizer import BPETokenizer  # noqa: E402
 
 
 # Load model and tokenizers once for all tests
@@ -15,8 +16,8 @@ def tokenizers() -> Tuple[BPETokenizer, Any]:
     """Executes tokenizers."""
     model = Small_LLM_Model()
     custom_tokenizer = BPETokenizer(
-        model.get_path_to_vocab_file(),
-        model.get_path_to_merges_file()
+        vocab_file=model.get_path_to_vocab_file(),
+        merges_file=model.get_path_to_merges_file()
     )
 
     try:

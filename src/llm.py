@@ -155,5 +155,5 @@ class LLM(BaseModel):
             str: The decoded text string.
         """
         if self.use_tokenizer:
-            return self._custom_tokenizer.decode(tokens)
+            return str(self._custom_tokenizer.decode(tokens))
         return str(self._model.decode(tokens))

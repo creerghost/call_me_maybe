@@ -14,6 +14,9 @@ e r
 """
 
 
+from typing import Any
+
+
 class BPETokenizer(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -39,7 +42,7 @@ class BPETokenizer(BaseModel):
     def vocab_rev(self) -> dict[int, str]:
         return self._vocab_rev
 
-    def model_post_init(self, __context) -> None:
+    def model_post_init(self, __context: Any) -> None:
         # vocab_file contains all tokens the model already have
         # merges_file contains an ordered list of priority pairs
         # bpe works by iteratively squashing two tokens into one
