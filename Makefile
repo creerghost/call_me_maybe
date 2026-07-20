@@ -50,7 +50,7 @@ run: install
 	@printf "$(MAGENTA)Running main pipeline...$(RESET)\n"
 	$(PYTHON) -m src $(ARGS)
 
-run-full: install
+run-bonus: install
 	@printf "$(MAGENTA)Running full suite (visual + tokenizer)...$(RESET)\n"
 	$(PYTHON) -m src $(ARGS) --visual --tokenizer
 
@@ -58,19 +58,7 @@ run-interactive: install
 	@printf "$(MAGENTA)Running interactive prompt mode...$(RESET)\n"
 	$(PYTHON) -m src $(ARGS) --visual --interactive
 
-run-visual: install
-	@printf "$(MAGENTA)Running with visual mode...$(RESET)\n"
-	$(PYTHON) -m src $(ARGS) --visual
-
 run-custom: install
-	@printf "$(MAGENTA)Running with custom model: $(MODEL_PATH)...$(RESET)\n"
-	$(PYTHON) -m src $(ARGS) --model $(MODEL_PATH)
-
-run-custom-visual: install
-	@printf "$(MAGENTA)Running custom model with visual mode...$(RESET)\n"
-	$(PYTHON) -m src $(ARGS) --model $(MODEL_PATH) --visual
-
-run-custom-full: install
 	@printf "$(MAGENTA)Running custom model (full)...$(RESET)\n"
 	$(PYTHON) -m src $(ARGS) --model $(MODEL_PATH) --visual --tokenizer
 
@@ -138,12 +126,9 @@ help:
 	@printf "$(YELLOW)Available targets:$(RESET)\n"
 	@printf "  $(GREEN)install$(RESET)            - Install dependencies using uv\n"
 	@printf "  $(GREEN)run$(RESET)                - Run the main pipeline\n"
-	@printf "  $(GREEN)run-visual$(RESET)         - Run the main script with visual mode\n"
-	@printf "  $(GREEN)run-full$(RESET)           - Run the main script with visual mode and tokenizer\n"
+	@printf "  $(GREEN)run-bonus$(RESET)          - Run full suite (visual + tokenizer)\n"
 	@printf "  $(GREEN)run-interactive$(RESET)    - Run the interactive prompt mode\n"
-	@printf "  $(GREEN)run-custom$(RESET)         - Run the main script with custom model\n"
-	@printf "  $(GREEN)run-custom-visual$(RESET)  - Run the main script with custom model and visual mode\n"
-	@printf "  $(GREEN)run-custom-full$(RESET)    - Run the main script with custom model, visual mode, and tokenizer\n"
+	@printf "  $(GREEN)run-custom$(RESET)         - Run custom model (full suite)\n"
 	@printf "  $(GREEN)test$(RESET)               - Run the test suite\n"
 	@printf "  $(GREEN)debug$(RESET)              - Run the main script in debug mode using pdb\n"
 	@printf "  $(GREEN)clean$(RESET)              - Remove temporary files and caches\n"
@@ -154,4 +139,4 @@ help:
 	@printf "  $(GREEN)help$(RESET)               - Show this help message\n"
 	@printf "===========================================================================\n"
 
-.PHONY: all install run run-full run-visual run-interactive run-custom run-custom-visual run-custom-full test debug clean clean-cache lint lint-strict exports help
+.PHONY: all install run run-bonus run-interactive run-custom test debug clean clean-cache lint lint-strict exports help

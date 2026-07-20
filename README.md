@@ -320,14 +320,9 @@ To run the standard evaluation pipeline using the default model (Qwen 0.6B):
 make run
 ```
 
-To run the pipeline with the **live visualizer dashboard**:
+To run the full suite with the **live visualizer dashboard** and the **custom BPE tokenizer**:
 ```bash
-make run-visual
-```
-
-To run full visualization using the **custom BPE tokenizer**:
-```bash
-make run-full
+make run-bonus
 ```
 
 To run the pipeline in **interactive mode**, allowing you to continuously type custom prompts from your keyboard instead of reading from the input JSON:
@@ -336,18 +331,9 @@ make run-interactive
 ```
 
 ### Using Custom Models
-The engine supports dynamic loading of other HuggingFace models. You can specify a custom model path via the Makefile:
+The engine supports dynamic loading of other HuggingFace models. You can specify a custom model path via the Makefile and run the full visualizer suite using:
 ```bash
 make run-custom
-```
-Or with the visualizer:
-```bash
-make run-custom-visual
-```
-
-Or with the visualizer using **custom BPE tokenizer**:
-```bash
-make run-custom-full
 ```
 
 *Note: You may encounter out-of-memory errors on smaller machines if you attempt to load models larger than 2B parameters without quantization <sup>[23](#glossary-23)</sup>.*
