@@ -143,7 +143,10 @@ class LLM(BaseModel):
 
         if self.use_tokenizer:
             return self._custom_tokenizer.encode(text)
-        return self._model.encode(text).squeeze().tolist()
+        res = self._model.encode(text).squeeze().tolist()
+        if isinstance(res, int):
+            return [res]
+        return res
 
     def decode(self, tokens: list[int]) -> str:
         """Decodes a list of token IDs into a text string.
