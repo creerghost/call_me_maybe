@@ -59,7 +59,7 @@ run-bonus: install
 
 run-interactive: install
 	@printf "$(MAGENTA)Running interactive prompt mode...$(RESET)\n"
-	$(PYTHON) -m src $(ARGS) --visual --interactive
+	$(PYTHON) -m src $(ARGS) --visual --interactive --tokenizer
 
 run-custom: install
 	@printf "$(MAGENTA)Running custom model (full)...$(RESET)\n"
