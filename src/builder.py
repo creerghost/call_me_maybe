@@ -4,6 +4,8 @@ from .masker import ValueMasker
 from .visualizer import Visualizer
 from .llm import LLM
 import numpy as np
+import re
+import string
 from typing import Callable, Any
 
 
@@ -60,9 +62,22 @@ class JSONBuilder(BaseModel):
 
             self._fast_forward(text=f'"{key}": ', phase="structure")
 
+            def get_candidates(param_type: str) -> list[str]:
+                if param_type in ["number", "integer"]:
+                    cands = re.findall(r'\b\d+(?:\.\d+)?\b', self._user_question)
+                else:
+                    cands = re.findall(
+                        r'"([^"]*)"|\'([^\']*)\'', self._user_question
+                    )
+                    cands = [c[0] or c[1] for c in cands]
+                return list(dict.fromkeys(cands))
+
             def decode_string() -> None:
                 self._fast_forward('"', phase="structure")
-                self._decode_str(phase=phase_name)
+                self._decode_str(
+                    phase=phase_name,
+                    autocomplete_options=get_candidates(param_schema.type)
+                )
                 self._fast_forward('"', phase="structure")
 
             def decode_enum() -> None:
@@ -78,18 +93,22 @@ class JSONBuilder(BaseModel):
                 self._decode_properties(param_schema.properties or {})
                 self._fast_forward('}', phase="structure")
 
+            def decode_num(allowed_chars: str) -> None:
+                self._decode_number(
+                    allowed_chars, phase=phase_name,
+                    autocomplete_options=get_candidates(param_schema.type)
+                )
+
             decoders: dict[str, Any] = {
                 "string": decode_string,
                 "boolean": lambda: self._decode_bool(phase=phase_name),
                 "bool": lambda: self._decode_bool(phase=phase_name),
-                "number": lambda: self._decode_number(
-                    allowed_chars="}" if i == len(keys)-1 else ",",
-                    phase=phase_name
-                    ),
-                "integer": lambda: self._decode_number(
-                    allowed_chars="}" if i == len(keys)-1 else ",",
-                    phase=phase_name
-                    ),
+                "number": lambda: decode_num(
+                    "}" if i == len(keys) - 1 else ","
+                ),
+                "integer": lambda: decode_num(
+                    "}" if i == len(keys) - 1 else ","
+                ),
                 "enum": decode_enum,
                 "object": decode_object
             }
@@ -217,12 +236,15 @@ class JSONBuilder(BaseModel):
             autocomplete_options=options
         )
 
-    def _decode_str(self, phase: str) -> str:
+    def _decode_str(
+        self, phase: str, autocomplete_options: list[str] | None = None
+    ) -> str:
         return self._run_decode_loop(
             get_valid_ids=lambda val: self.masker.get_string_tokens(),
             is_done=lambda val, latest_token: ('"' in latest_token, False),
             phase=phase,
-            logit_boosts={'"': 5.0}
+            logit_boosts={'"': 5.0},
+            autocomplete_options=autocomplete_options
         )
 
     def _decode_bool(self, phase: str) -> str:
@@ -236,7 +258,10 @@ class JSONBuilder(BaseModel):
             phase=phase
         )
 
-    def _decode_number(self, allowed_chars: str, phase: str) -> str:
+    def _decode_number(
+        self, allowed_chars: str, phase: str,
+        autocomplete_options: list[str] | None = None
+    ) -> str:
         boosts = {c: 10.0 for c in allowed_chars}
         return self._run_decode_loop(
             get_valid_ids=lambda val: self.masker.get_number_tokens(
@@ -248,5 +273,6 @@ class JSONBuilder(BaseModel):
                 any(c in allowed_chars for c in latest_token), False
             ),
             phase=phase,
-            logit_boosts=boosts
+            logit_boosts=boosts,
+            autocomplete_options=autocomplete_options
         )

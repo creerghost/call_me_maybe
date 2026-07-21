@@ -34,7 +34,8 @@ class LLM(BaseModel):
                     merges_file=self._model.get_path_to_merges_file(),
                 )
             except Exception as e:
-                print(f"Warning: Failed to load custom tokenizer files ({e}). Falling back to HuggingFace tokenizer.")
+                print(f"Warning: Failed to load custom tokenizer files ({e}). "
+                      f"Falling back to HuggingFace tokenizer.")
                 self.use_tokenizer = False
         self._load_vocab()
 
@@ -123,13 +124,13 @@ class LLM(BaseModel):
             tokenizer = self._model._tokenizer
             if hasattr(tokenizer, "chat_template") and tokenizer.chat_template:
                 messages = [{"role": "user", "content": text}]
-                
-                if self.use_tokenizer:
-                    prompt_str = tokenizer.apply_chat_template(
-                        messages, add_generation_prompt=True, tokenize=False
-                    )
-                    return self._custom_tokenizer.encode(prompt_str)
-                
+
+                # if self.use_tokenizer:
+                #     prompt_str = tokenizer.apply_chat_template(
+                #         messages, add_generation_prompt=True, tokenize=False
+                #     )
+                #     return self._custom_tokenizer.encode(prompt_str)
+
                 res = tokenizer.apply_chat_template(
                     messages, add_generation_prompt=True
                 )

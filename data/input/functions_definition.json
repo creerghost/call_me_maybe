@@ -84,18 +84,6 @@
     }
   },
   {
-    "name": "fn_is_it_my_name",
-    "description": "Find out if its user's name.",
-    "parameters": {
-      "name": {
-        "type": "string"
-      }
-    },
-    "returns": {
-      "type": "boolean"
-    }
-  },
-  {
     "name": "fn_update_user",
     "description": "Update user information.",
     "parameters": {

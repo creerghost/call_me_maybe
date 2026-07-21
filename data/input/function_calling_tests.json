@@ -33,13 +33,10 @@
     "prompt": "Substitute the word 'cat' with 'dog' in 'The cat sat on the mat with another cat'"
   },
   {
-    "prompt": "Distance from New York to Los Angeles?"
+    "prompt": "Distance from New York City to Los Angeles?"
   },
   {
-    "prompt": "Какое расстояние от Москвы до Праги?"
-  },
-  {
-    "prompt": "My name is Arthur. Is my name Arthur?"
+    "prompt": "Какое расстояние от Варшавы (Польша) до Праги (Чехия)?"
   },
   {
     "prompt": "Update the user John Doe, who is 30 years old."
