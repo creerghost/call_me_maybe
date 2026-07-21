@@ -28,10 +28,14 @@ class LLM(BaseModel):
         if self.use_tokenizer:
             from .tokenizer import BPETokenizer
 
-            self._custom_tokenizer = BPETokenizer(
-                vocab_file=self._model.get_path_to_vocab_file(),
-                merges_file=self._model.get_path_to_merges_file(),
-            )
+            try:
+                self._custom_tokenizer = BPETokenizer(
+                    vocab_file=self._model.get_path_to_vocab_file(),
+                    merges_file=self._model.get_path_to_merges_file(),
+                )
+            except Exception as e:
+                print(f"Warning: Failed to load custom tokenizer files ({e}). Falling back to HuggingFace tokenizer.")
+                self.use_tokenizer = False
         self._load_vocab()
 
     def _init_llm(self) -> None:
