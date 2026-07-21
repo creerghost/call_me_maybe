@@ -131,7 +131,8 @@ class JSONBuilder(BaseModel):
         get_valid_ids: Callable[[str], list[int]],
         is_done: Callable[[str, str], tuple[bool, bool]],
         phase: str,
-        logit_boosts: dict[str, float] | None = None
+        logit_boosts: dict[str, float] | None = None,
+        autocomplete_options: list[str] | None = None
     ) -> str:
         current_value = ""
         token_count = 0
@@ -186,6 +187,19 @@ class JSONBuilder(BaseModel):
                 )
                 self.visualizer.render(event)
 
+            if autocomplete_options:
+                cv_strip = current_value.strip()
+                matching_options = [
+                    opt for opt in autocomplete_options
+                    if opt.startswith(cv_strip)
+                ]
+                if len(matching_options) == 1:
+                    suffix = matching_options[0][len(cv_strip):]
+                    if suffix:
+                        self._fast_forward(suffix, phase=phase)
+                        current_value += suffix
+                    break
+
             if done:
                 break
 
@@ -199,7 +213,8 @@ class JSONBuilder(BaseModel):
             is_done=lambda val, latest_token: (
                 (val + latest_token).strip() in options, True
             ),
-            phase=phase
+            phase=phase,
+            autocomplete_options=options
         )
 
     def _decode_str(self, phase: str) -> str:
