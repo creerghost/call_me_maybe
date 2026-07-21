@@ -427,15 +427,16 @@ Tested against `Qwen/Qwen2.5-0.5B` and `TinyLlama-1.1B`:
 5. **Error Recovery & Infinite Generation Loops:** 
    - **The Trapped LLM:** While testing `TinyLlama-1.1B`, the model would sometimes forget to close a JSON string with a quote `"`. Because our constrained decoder strictly blocked it from generating invalid JSON syntax (like random brackets or newlines), the model was effectively "trapped" generating infinitely long, technically valid string characters (e.g., `"Programming is fun*greeting*world!*greeting..."`).
    - **Failed Repetition Penalties:** I initially tried to fix this by adding a repetition penalty <sup>[25](#glossary-25)</sup> to punish the model for repeating the same words. However, for 1-Billion parameter models, subtracting logits too aggressively (e.g., `-5.0`) made the model mathematically "scared" to choose basic English letters, breaking the text entirely.
-   - **The Solution (Dynamic Logit Boosting):** The `_run_decode_loop` in `JSONBuilder` applies dynamic **Logit Boosting**. After 3 tokens, the decoder artificially adds a massive mathematical boost (e.g., `+5.0`) to the closing delimiter token's score. This safely nudges the model toward finishing the value naturally without completely breaking its language generation logic.
+   - **The Solution (Progressive Logit Boosting):** The `_run_decode_loop` in `JSONBuilder` applies **Progressive Logit Boosting**. After 3 tokens, the decoder artificially adds a mathematical boost to the closing delimiter token's score, multiplying the boost linearly by the amount of tokens generated. This safely nudges the model toward finishing the value, and if it continues generating infinitely, the progressive multiplier mathematically forces a guaranteed string termination!
 
      *Implementation Example:*
      ```python
-     # Nudge the model to finish its sentence after 3 tokens
+     # Flat boost initially, progressive scaling only for run-away loops
      if logit_boosts and token_count > 3:
+         multiplier = 1.0 + max(0.0, float(token_count - 15)) * 0.5
          for vid, boost_val in boost_tokens.items():
              if masked_logits[vid] > float("-inf"):
-                 masked_logits[vid] += boost_val
+                 masked_logits[vid] += (boost_val * multiplier)
      ```
 
 6. **Replicating the Tokenizer Byte-to-Unicode Mapping:**

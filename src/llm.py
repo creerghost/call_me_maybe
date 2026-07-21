@@ -120,16 +120,16 @@ class LLM(BaseModel):
             list[int] | Any: A flat list of integer token IDs.
         """
         if apply_chat_template:
-            if self.use_tokenizer:
-                prompt_ids = self._custom_tokenizer.encode(text)
-                return (
-                    [151644, 872, 198]
-                    + prompt_ids
-                    + [151645, 198, 151644, 77091, 198]
-                )
             tokenizer = self._model._tokenizer
             if hasattr(tokenizer, "chat_template") and tokenizer.chat_template:
                 messages = [{"role": "user", "content": text}]
+                
+                if self.use_tokenizer:
+                    prompt_str = tokenizer.apply_chat_template(
+                        messages, add_generation_prompt=True, tokenize=False
+                    )
+                    return self._custom_tokenizer.encode(prompt_str)
+                
                 res = tokenizer.apply_chat_template(
                     messages, add_generation_prompt=True
                 )

@@ -17,8 +17,11 @@ OUTPUT_JSON = data/output/function_calling_results.json
 LLM_PATH = llm_sdk
 LLM_NAME = Small_LLM_Model
 # Model can be:
-MODEL_PATH = TinyLlama/TinyLlama-1.1B-Chat-v1.0
-# MODEL_PATH = microsoft/Phi-3-mini-4k-instruct  # (requires more and more RAM)
+# MODEL_PATH = TinyLlama/TinyLlama-1.1B-Chat-v1.0
+# MODEL_PATH = Qwen/Qwen2.5-0.5B-Instruct # (Highly recommended: low RAM, fast, excels at function calling)
+MODEL_PATH = Qwen/Qwen2.5-1.5B-Instruct # (Slightly more RAM, much smarter function calling)
+# MODEL_PATH = HuggingFaceTB/SmolLM2-360M-Instruct # (Extremely low RAM, very fast)
+# MODEL_PATH = microsoft/Phi-3-mini-4k-instruct  # (Requires a bit more RAM, ~3.8B parameters)
 # =============================================================================
 
 UV = uv

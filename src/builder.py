@@ -64,7 +64,7 @@ class JSONBuilder(BaseModel):
                 self._fast_forward('"', phase="structure")
                 self._decode_str(phase=phase_name)
                 self._fast_forward('"', phase="structure")
-                
+
             def decode_enum() -> None:
                 self._fast_forward('"', phase="structure")
                 if param_schema.options:
@@ -72,7 +72,7 @@ class JSONBuilder(BaseModel):
                 else:
                     self._decode_str(phase=phase_name)
                 self._fast_forward('"', phase="structure")
-                
+
             def decode_object() -> None:
                 self._fast_forward('{', phase="structure")
                 self._decode_properties(param_schema.properties or {})
@@ -153,9 +153,12 @@ class JSONBuilder(BaseModel):
 
             # Apply logit boosting
             if logit_boosts and token_count > 3:
+                # Flat boost initially, progressive scaling only for run-away
+                # loops
+                multiplier = 1.0 + max(0.0, float(token_count - 15)) * 0.5
                 for vid, boost_val in boost_tokens.items():
                     if masked_logits[vid] > float("-inf"):
-                        masked_logits[vid] += boost_val
+                        masked_logits[vid] += (boost_val * multiplier)
 
             next_token_id = int(np.argmax(masked_logits))
 

@@ -70,7 +70,7 @@
   },
   {
     "name": "fn_city_distances",
-    "description": "Find a distance between two cities.",
+    "description": "Find a distance between two cities. Only cities should be written.",
     "parameters": {
       "city_1": {
         "type": "string"
