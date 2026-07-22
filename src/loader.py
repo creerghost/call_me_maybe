@@ -6,6 +6,13 @@ from typing import Any
 
 
 class Loader(BaseModel):
+    """Loads and validates JSON definition and prompt files.
+
+    Attributes:
+        fdef_name (str): Path to the functions definition JSON file.
+        fcall_name (str | None): Path to the prompts JSON file.
+    """
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     fdef_name: str
@@ -15,9 +22,19 @@ class Loader(BaseModel):
     _test_prompts: list[TestPrompt] = PrivateAttr(default_factory=list)
 
     def model_post_init(self, __context: Any) -> None:
+        """Initializes the loader by loading the JSON files into memory.
+
+        Args:
+            __context (Any): Context for pydantic post-init.
+        """
         self._load()
 
     def _load(self) -> None:
+        """Loads and parses JSON files into Pydantic models.
+
+        Raises:
+            LoaderError: If files are missing, empty, or contain invalid JSON.
+        """
         try:
             with open(self.fdef_name, "r") as f:
                 json_defs = json.load(f)
@@ -49,8 +66,18 @@ class Loader(BaseModel):
 
     @property
     def fn_defs(self) -> list[FunctionDefinition]:
+        """Returns the loaded function definitions.
+
+        Returns:
+            list[FunctionDefinition]: A list of parsed function schemas.
+        """
         return self._fn_defs
 
     @property
     def test_prompts(self) -> list[TestPrompt]:
+        """Returns the loaded test prompts.
+
+        Returns:
+            list[TestPrompt]: A list of parsed test prompts.
+        """
         return self._test_prompts

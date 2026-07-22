@@ -10,7 +10,9 @@ from src.llm import LLM
 
 
 class DummyLLM(LLM):
+    """Mock LLM implementation for testing the generation loop."""
     def __init__(self, **data):
+        """Initializes the mock LLM with a hardcoded vocabulary."""
         super().__init__(**data)
         self._token2id = {
             "fn_add": 0,
@@ -33,44 +35,53 @@ class DummyLLM(LLM):
         self._token_ids = np.array(list(self._token2id.values()))
 
     def model_post_init(self, __context):
+        """No-op for the mock LLM initialization."""
         pass
 
     _mock_logits_fn = None
 
     def encode(self, prompt: str, **kwargs) -> list[int]:
+        """Mocks string encoding by hashing the prompt."""
         idx = hash(prompt)
         self._id2token[idx] = prompt
         return [idx]
 
     def decode(self, ids: list[int]) -> str:
+        """Mocks decoding by looking up hardcoded token IDs."""
         return "".join(self._id2token.get(i, "") for i in ids)
 
     def get_logits(self, ids: list[int]) -> np.ndarray:
+        """Mocks logit generation using a custom injected function."""
         if self._mock_logits_fn:
             return self._mock_logits_fn(ids)
         return np.full(len(self._token2id), -np.inf)
 
     def get_vocab_size(self):
+        """Returns the size of the hardcoded mock vocabulary."""
         return len(self._token2id)
 
 
 @pytest.fixture
 def mock_llm():
+    """Provides a fresh DummyLLM instance for each test."""
     return DummyLLM(llm_path="dummy", llm_name="dummy")
 
 
 @pytest.fixture
 def mock_masker(mock_llm):
+    """Provides a ValueMasker tied to the mock LLM."""
     return ValueMasker(llm=mock_llm)
 
 
 def test_builder_hardcoded(mock_llm, mock_masker):
+    """Tests if fast-forwarding structural tokens bypasses LLM inference."""
     builder = JSONBuilder(llm=mock_llm, masker=mock_masker)
     builder._fast_forward('{"name": "', phase="test")
     assert builder._generated_text == '{"name": "'
 
 
 def test_decode_enum(mock_llm, mock_masker):
+    """Tests that enum decoding strictly follows the allowed options."""
     builder = JSONBuilder(llm=mock_llm, masker=mock_masker)
     builder._context_ids = []
     builder._generated_text = ""
@@ -91,6 +102,7 @@ def test_decode_enum(mock_llm, mock_masker):
 
 
 def test_decode_number(mock_llm, mock_masker):
+    """Tests that number decoding successfully masks out non-numeric tokens."""
     builder = JSONBuilder(llm=mock_llm, masker=mock_masker)
     builder._context_ids = []
     builder._generated_text = ""
@@ -110,6 +122,7 @@ def test_decode_number(mock_llm, mock_masker):
 
 
 def test_build_end_to_end(mock_llm, mock_masker):
+    """Tests the full end-to-end generation pipeline for a JSON schema."""
     builder = JSONBuilder(llm=mock_llm, masker=mock_masker)
 
     fn_def = FunctionDefinition(

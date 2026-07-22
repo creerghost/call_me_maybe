@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, PrivateAttr
 
 
 class LLM(BaseModel):
+    """A standardized wrapper around different LLMs and Tokenizers."""
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     # Public fields (validated by pydantic)
@@ -23,7 +24,11 @@ class LLM(BaseModel):
     _token_ids: Any = PrivateAttr(default=None)  # np.ndarray
 
     def model_post_init(self, __context: Any) -> None:
-        """Loads the LLM and vocabulary after Pydantic validation."""
+        """Loads the LLM and vocabulary after Pydantic validation.
+
+        Args:
+            __context (Any): Context for pydantic post-init.
+        """
         self._init_llm()
         if self.use_tokenizer:
             from .tokenizer import BPETokenizer
@@ -36,6 +41,8 @@ class LLM(BaseModel):
             except Exception as e:
                 print(f"Warning: Failed to load custom tokenizer files ({e}). "
                       f"Falling back to HuggingFace tokenizer.")
+                import time
+                time.sleep(2)
                 self.use_tokenizer = False
         self._load_vocab()
 
@@ -49,8 +56,7 @@ class LLM(BaseModel):
             self._model = model_class()
 
     def _load_vocab(self) -> None:
-        """Extracts the vocabulary mapping from the loaded model's
-        tokenizer."""
+        """Extracts the vocabulary mapping from the loaded tokenizer."""
         if self.use_tokenizer:
             self._token2id = self._custom_tokenizer.vocab
             self._id2token = self._custom_tokenizer.vocab_rev
@@ -69,22 +75,47 @@ class LLM(BaseModel):
     # Property accessors
     @property
     def model(self) -> Any:
+        """Returns the raw underlying model instance.
+
+        Returns:
+            Any: The loaded language model object.
+        """
         return self._model
 
     @property
     def token2id(self) -> dict[str, int]:
+        """Returns the dictionary mapping string tokens to integer IDs.
+
+        Returns:
+            dict[str, int]: Token string to token ID mapping.
+        """
         return self._token2id
 
     @property
     def id2token(self) -> dict[int, str]:
+        """Returns the dictionary mapping integer IDs to string tokens.
+
+        Returns:
+            dict[int, str]: Token ID to token string mapping.
+        """
         return self._id2token
 
     @property
     def token_strings(self) -> Any:
+        """Returns a numpy array of all vocabulary string tokens.
+
+        Returns:
+            Any: A numpy array of strings.
+        """
         return self._token_strings
 
     @property
     def token_ids(self) -> Any:
+        """Returns a numpy array of all vocabulary integer IDs.
+
+        Returns:
+            Any: A numpy array of int32 token IDs.
+        """
         return self._token_ids
 
     # Public methods

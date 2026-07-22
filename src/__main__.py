@@ -77,7 +77,7 @@ def generate_result(
     """
     prompt_str = PromptConstructor.build_prompt(
         loader.fn_defs, test_prompt.prompt
-        )
+    )
     prompt_ids = builder.llm.encode(prompt_str)
 
     visualizer = Visualizer(id2token=builder.llm.id2token) \

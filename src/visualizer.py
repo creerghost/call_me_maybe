@@ -6,6 +6,7 @@ from pydantic import ConfigDict, BaseModel, PrivateAttr
 
 
 class Visualizer(BaseModel):
+    """Renders a live CLI dashboard displaying generation metrics."""
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     id2token: dict[int, str]

@@ -3,7 +3,8 @@ import json
 import re
 from pydantic import BaseModel, ConfigDict, PrivateAttr
 
-""" Example of merges.txt file
+"""
+Example of merges.txt file:
 #version: 0.2
 Ġ t
 i n
@@ -18,6 +19,7 @@ from typing import Any
 
 
 class BPETokenizer(BaseModel):
+    """A custom Byte-Pair Encoding tokenizer implementation."""
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     vocab_file: str
@@ -32,17 +34,32 @@ class BPETokenizer(BaseModel):
     _byte_decoder: dict[str, int] = PrivateAttr(default_factory=dict)
     _cache: dict[str, str] = PrivateAttr(default_factory=dict)
     _pat: re.Pattern[str] = re.compile(
-            r"""'s|'t|'re|'ve|'m|'ll|'d| ?\w+| ?[^\s\w]+|\s+(?!\S)|\s+""")
+        r"""'s|'t|'re|'ve|'m|'ll|'d| ?\w+| ?[^\s\w]+|\s+(?!\S)|\s+""")
 
     @property
     def vocab(self) -> dict[str, int]:
+        """Returns the dictionary mapping string tokens to integer IDs.
+
+        Returns:
+            dict[str, int]: The vocabulary mapping string tokens to IDs.
+        """
         return self._vocab
 
     @property
     def vocab_rev(self) -> dict[int, str]:
+        """Returns the dictionary mapping integer IDs to string tokens.
+
+        Returns:
+            dict[int, str]: Reverse vocabulary mapping IDs to tokens.
+        """
         return self._vocab_rev
 
     def model_post_init(self, __context: Any) -> None:
+        """Loads vocabulary and merge rules, and precomputes encoders.
+
+        Args:
+            __context (Any): Context for pydantic post-init.
+        """
         # vocab_file contains all tokens the model already have
         # merges_file contains an ordered list of priority pairs
         # bpe works by iteratively squashing two tokens into one
@@ -70,11 +87,15 @@ class BPETokenizer(BaseModel):
 
     @staticmethod
     def bytes_to_unicode() -> dict[int, str]:
-        """
+        """Maps 256 raw bytes to visible characters.
+
         LLMs process raw UTF-8 bytes (0 - 255 numbers), not text.
         Raw bytes contain invisible control characters which break JSON.
-        Function maps all 256 raw bytes to visible characters.
-        (this is why space byte convers into weird G)
+        This function maps all 256 raw bytes to visible characters.
+        (this is why the space byte converts into the weird Ġ).
+
+        Returns:
+            dict[int, str]: Mapping from byte integer to unicode char.
         """
         bytes = (
             list(range(ord("!"), ord("~") + 1))

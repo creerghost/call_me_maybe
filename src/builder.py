@@ -1,15 +1,17 @@
-from .models import GenerationEvent, FunctionDefinition, FunctionParameter
+import re
+from typing import Callable, Any, Optional
+
 from pydantic import BaseModel, PrivateAttr, ConfigDict
+import numpy as np
+
+from .models import GenerationEvent, FunctionDefinition, FunctionParameter
 from .masker import ValueMasker
 from .visualizer import Visualizer
 from .llm import LLM
-import numpy as np
-import re
-import string
-from typing import Callable, Any
 
 
 class JSONBuilder(BaseModel):
+    """Orchestrates token-by-token generation using constrained decoding."""
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     llm: LLM
@@ -25,6 +27,16 @@ class JSONBuilder(BaseModel):
         prompt_ids: list[int],
         user_question: str
     ) -> str:
+        """Executes the constrained generation loop for a user prompt.
+
+        Args:
+            fn_defs (list[FunctionDefinition]): Available function schemas.
+            prompt_ids (list[int]): Tokenized input IDs of the prompt.
+            user_question (str): The raw user question string.
+
+        Returns:
+            str: The final generated JSON string for the function call.
+        """
         self._context_ids = list(prompt_ids)
         self._user_question = user_question
         self._generated_text = ""
@@ -37,10 +49,6 @@ class JSONBuilder(BaseModel):
         matched_fn = next(fn for fn in fn_defs if fn.name == fn_name)
         params = matched_fn.parameters
 
-        if not params:
-            self._fast_forward(text='"}', phase="structure")
-            return self._generated_text
-
         self._fast_forward(text='", "parameters": {', phase="structure")
 
         self._decode_properties(properties=params)
@@ -51,7 +59,11 @@ class JSONBuilder(BaseModel):
         self,
         properties: dict[str, FunctionParameter]
     ) -> None:
-        # recursive method which can handle nested jsons
+        """Recursively decodes a dictionary of function parameters.
+
+        Args:
+            properties (dict[str, FunctionParameter]): Parameter schema dict.
+        """
         if not properties:
             return
 
@@ -63,8 +75,18 @@ class JSONBuilder(BaseModel):
             self._fast_forward(text=f'"{key}": ', phase="structure")
 
             def get_candidates(param_type: str) -> list[str]:
+                """Extracts plausible dynamic candidates from user question.
+
+                Args:
+                    param_type (str): The type of the parameter.
+
+                Returns:
+                    list[str]: Extracted candidate substrings.
+                """
                 if param_type in ["number", "integer"]:
-                    cands = re.findall(r'\b\d+(?:\.\d+)?\b', self._user_question)
+                    cands = re.findall(
+                        r'\b\d+(?:\.\d+)?\b', self._user_question
+                    )
                 else:
                     cands = re.findall(
                         r'"([^"]*)"|\'([^\']*)\'', self._user_question
@@ -73,6 +95,7 @@ class JSONBuilder(BaseModel):
                 return list(dict.fromkeys(cands))
 
             def decode_string() -> None:
+                """Decodes a general string parameter."""
                 self._fast_forward('"', phase="structure")
                 self._decode_str(
                     phase=phase_name,
@@ -81,6 +104,7 @@ class JSONBuilder(BaseModel):
                 self._fast_forward('"', phase="structure")
 
             def decode_enum() -> None:
+                """Decodes an enum string parameter."""
                 self._fast_forward('"', phase="structure")
                 if param_schema.options:
                     self._decode_enum(param_schema.options, phase=phase_name)
@@ -89,11 +113,17 @@ class JSONBuilder(BaseModel):
                 self._fast_forward('"', phase="structure")
 
             def decode_object() -> None:
+                """Decodes a nested JSON object."""
                 self._fast_forward('{', phase="structure")
                 self._decode_properties(param_schema.properties or {})
                 self._fast_forward('}', phase="structure")
 
             def decode_num(allowed_chars: str) -> None:
+                """Decodes a numeric parameter.
+
+                Args:
+                    allowed_chars (str): Characters allowed after the number.
+                """
                 self._decode_number(
                     allowed_chars, phase=phase_name,
                     autocomplete_options=get_candidates(param_schema.type)
@@ -124,7 +154,12 @@ class JSONBuilder(BaseModel):
                 self._fast_forward(text=', ', phase="structure")
 
     def _fast_forward(self, text: str, phase: str) -> None:
-        # A case when we don't need llm
+        """Bypasses LLM generation to append hardcoded structural tokens.
+
+        Args:
+            text (str): The exact structural string to append.
+            phase (str): The current generation phase for the visualizer.
+        """
         token_ids = self.llm.encode(text, apply_chat_template=False)
         for i in token_ids:
             self._context_ids.append(i)
@@ -150,19 +185,30 @@ class JSONBuilder(BaseModel):
         get_valid_ids: Callable[[str], list[int]],
         is_done: Callable[[str, str], tuple[bool, bool]],
         phase: str,
-        logit_boosts: dict[str, float] | None = None,
-        autocomplete_options: list[str] | None = None
+        logit_boosts: Optional[dict[str, float]] = None,
+        autocomplete_options: Optional[list[str]] = None
     ) -> str:
+        """The core autoregressive generation loop.
+
+        Args:
+            get_valid_ids (Callable): Returns a list of valid token IDs.
+            is_done (Callable): Returns (is_done, keep_latest_token).
+            phase (str): Current phase for visualization (e.g. "param:a").
+            logit_boosts (dict): Mapping from token substring to boost.
+            autocomplete_options (list): Candidates to fast-forward.
+
+        Returns:
+            str: The generated and validated string segment.
+        """
         current_value = ""
         token_count = 0
 
         # Precompute boosted token IDs if provided
         boost_tokens: dict[int, float] = {}
         if logit_boosts:
-            for token_str_to_boost, boost_val in logit_boosts.items():
-                for vocab_id, vocab_str in self.llm.id2token.items():
-                    if token_str_to_boost in vocab_str:
-                        boost_tokens[vocab_id] = boost_val
+            boost_tokens = self.masker.get_boost_tokens(
+                tuple(logit_boosts.items())
+            )
 
         while True:
             logits = self.llm.get_logits(self._context_ids)
@@ -225,6 +271,15 @@ class JSONBuilder(BaseModel):
         return current_value.strip()
 
     def _decode_enum(self, options: list[str], phase: str) -> str:
+        """Decodes an enum string strictly matching one of the options.
+
+        Args:
+            options (list[str]): The allowed enum strings.
+            phase (str): Current generation phase.
+
+        Returns:
+            str: The generated enum string.
+        """
         return self._run_decode_loop(
             get_valid_ids=lambda val: self.masker.get_enum_tokens(
                 options, val
@@ -237,8 +292,17 @@ class JSONBuilder(BaseModel):
         )
 
     def _decode_str(
-        self, phase: str, autocomplete_options: list[str] | None = None
+        self, phase: str, autocomplete_options: Optional[list[str]] = None
     ) -> str:
+        """Decodes an arbitrary string up to the closing quote.
+
+        Args:
+            phase (str): Current generation phase.
+            autocomplete_options (list[str]): Optional fast-forward strings.
+
+        Returns:
+            str: The generated string.
+        """
         return self._run_decode_loop(
             get_valid_ids=lambda val: self.masker.get_string_tokens(),
             is_done=lambda val, latest_token: ('"' in latest_token, False),
@@ -248,6 +312,14 @@ class JSONBuilder(BaseModel):
         )
 
     def _decode_bool(self, phase: str) -> str:
+        """Decodes a boolean 'true' or 'false' literal.
+
+        Args:
+            phase (str): Current generation phase.
+
+        Returns:
+            str: The generated boolean string.
+        """
         return self._run_decode_loop(
             get_valid_ids=lambda val: self.masker.get_boolean_tokens(
                 val
@@ -260,8 +332,18 @@ class JSONBuilder(BaseModel):
 
     def _decode_number(
         self, allowed_chars: str, phase: str,
-        autocomplete_options: list[str] | None = None
+        autocomplete_options: Optional[list[str]] = None
     ) -> str:
+        """Decodes a numeric literal up to a stop character.
+
+        Args:
+            allowed_chars (str): Chars allowed after number.
+            phase (str): Current generation phase.
+            autocomplete_options (list[str]): Optional fast-forward strings.
+
+        Returns:
+            str: The generated numeric string.
+        """
         boosts = {c: 10.0 for c in allowed_chars}
         return self._run_decode_loop(
             get_valid_ids=lambda val: self.masker.get_number_tokens(
